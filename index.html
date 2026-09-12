@@ -23,65 +23,16 @@
 
 <style>
   [x-cloak] { display: none !important; }
-  html, body { background:#0B1120; color: #e2e8f0; font-family: 'Inter', sans-serif; }
-
-  /* Dynamic Orb Wrapper */
-  .orb-wrap { position:relative; width:220px; height:220px; display:flex; align-items:center; justify-content:center; }
-  
-  .orb-core {
-    width:120px; height:120px; border-radius:9999px;
-    position:relative; z-index:10;
-    transition: all 0.4s ease;
+  html, body { background:#F5F5F5; color:#212121; font-family:'Inter', sans-serif; height:100%; }
+  /* Custom Scrollbar untuk Chat */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #D6D6D6; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #B8B8B8; }
+  .glass-card {
+    background: #FFFFFF;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.08);
   }
-
-  /* State Colors & Glows */
-  .orb-core.state-speaking {
-    background: radial-gradient(circle at 35% 30%, #4FD1E8, #0E83A4 50%, #083C4D 100%);
-    box-shadow: 0 0 60px rgba(79,209,232,0.85), inset 0 0 35px rgba(255,255,255,0.4);
-    animation: orbTalkPulse 0.5s infinite alternate ease-in-out;
-  }
-
-  .orb-core.state-listening {
-    background: radial-gradient(circle at 35% 30%, #34E3A1, #10915F 50%, #07472E 100%);
-    box-shadow: 0 0 55px rgba(52,227,161,0.8), inset 0 0 30px rgba(255,255,255,0.35);
-    animation: orbListenBreath 1.8s infinite ease-in-out;
-  }
-
-  .orb-core.state-thinking {
-    background: radial-gradient(circle at 35% 30%, #F5B942, #B87215 50%, #593303 100%);
-    box-shadow: 0 0 55px rgba(245,185,66,0.8), inset 0 0 30px rgba(255,255,255,0.35);
-    animation: orbThinkSpin 1s infinite linear;
-  }
-
-  .orb-core.state-idle {
-    background: radial-gradient(circle at 35% 30%, #4FD1E8, #22B8D6 45%, #0E5C73 100%);
-    box-shadow: 0 0 40px rgba(79,209,232,0.45);
-  }
-
-  .orb-ring {
-    position:absolute; border-radius:9999px; border:1.5px solid rgba(79,209,232,0.4);
-    transition: all 0.3s ease;
-  }
-  .orb-ring.r1 { width:145px; height:145px; }
-  .orb-ring.r2 { width:180px; height:180px; }
-  .orb-ring.r3 { width:215px; height:215px; }
-
-  .state-speaking ~ .orb-ring {
-    border-color: rgba(79,209,232,0.8);
-    animation: orbRingRipple 0.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-  }
-
-  .state-listening ~ .orb-ring {
-    border-color: rgba(52,227,161,0.7);
-    animation: orbRingRipple 1.6s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-  }
-
-  @keyframes orbTalkPulse { 0% { transform: scale(0.95); } 100% { transform: scale(1.12); } }
-  @keyframes orbListenBreath { 0%, 100% { transform: scale(0.98); } 50% { transform: scale(1.05); } }
-  @keyframes orbThinkSpin { 0% { transform: rotate(0deg) scale(0.95); } 50% { transform: rotate(180deg) scale(1.05); } 100% { transform: rotate(360deg) scale(0.95); } }
-  @keyframes orbRingRipple { 0% { transform: scale(0.85); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
-
-  .status-dot { width:10px; height:10px; border-radius:9999px; }
 </style>
 
 <script>
@@ -94,16 +45,177 @@
           mono: ['"JetBrains Mono"', 'monospace'],
         },
         colors: {
-          ink: { 950:'#080C14', 900:'#0B1120', 850:'#0F1729', 800:'#121A2B', 700:'#1B2438', 600:'#293349' },
-          calm: { 400:'#34E3A1', 500:'#1EC988' },
-          warn: { 400:'#F5B942', 500:'#E29F1F' },
-          alert:{ 400:'#FB6A6A', 500:'#EF4444' },
-          signal:{400:'#4FD1E8',500:'#22B8D6'}
+          ink: { 950:'#FFFFFF', 900:'#FFFFFF', 850:'#FAFAFA', 800:'#F0F0F0', 700:'#E4E4E4', 600:'#D4D4D4' },
+          maroon: { 50:'#FBEAEA', 100:'#F3D2D2', 600:'#800000', 700:'#660000' },
+          crimson: { 500:'#DC143C', 600:'#C21235' }
         }
       }
     }
   }
 </script>
+</head>
+<body class="bg-[#F5F5F5] text-[#212121] antialiased selection:bg-maroon-100 h-screen overflow-hidden">
+
+<div x-data="interviewApp()" x-init="init()" class="h-screen flex flex-col">
+  
+  <header class="border-b-2 border-maroon-700 bg-maroon-600 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center border border-white/30">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        </div>
+        <h1 class="text-lg font-display font-bold text-white tracking-tight">AI Counselor BK</h1>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div x-show="interviewStarted" class="px-3 py-1 rounded-full bg-white/15 border border-white/30 text-[11px] font-mono flex items-center text-white" x-cloak>
+          <span class="w-1.5 h-1.5 bg-emerald-300 rounded-full mr-2 animate-pulse"></span>
+          Room: <span x-text="roomId" class="ml-1 font-semibold text-white"></span>
+        </div>
+        <button x-show="userRole === 'murid' && !interviewStarted" @click="attemptAdminAccess('teacher')" class="text-xs bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/30 transition">
+          🔒 Panel Guru BK
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-3 relative flex flex-col overflow-hidden">
+
+    <!-- VIEW: PERSIAPAN -->
+    <div x-show="currentView === 'candidate' && !interviewStarted" x-cloak class="max-w-md mx-auto w-full m-auto">
+      <div class="glass-card p-8 rounded-2xl border border-gray-200 relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-maroon-600"></div>
+        <div class="text-center mb-6">
+          <h2 class="text-2xl font-display font-bold text-[#212121] mb-2">Sesi Konseling AI</h2>
+          <p class="text-sm text-gray-500">Silakan masukkan nama untuk memulai percakapan santai dengan Kak Rama.</p>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nama Panggilan</label>
+            <input type="text" x-model="studentName" placeholder="Contoh: Budi" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-[#212121] focus:outline-none focus:border-maroon-600 transition">
+          </div>
+          <label class="flex items-start space-x-3 cursor-pointer group">
+            <div class="relative flex items-center justify-center mt-0.5">
+              <input type="checkbox" x-model="agreeCheckbox" class="peer sr-only">
+              <div class="w-5 h-5 rounded border-2 border-gray-300 peer-checked:bg-maroon-600 peer-checked:border-maroon-600 transition"></div>
+              <svg class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <span class="text-xs text-gray-500 group-hover:text-gray-700 transition">Saya setuju untuk mengaktifkan kamera dan mikrofon selama sesi ini berlangsung.</span>
+          </label>
+          <button @click="giveConsent()" :disabled="!agreeCheckbox || !studentName.trim() || modelLoading" class="w-full bg-crimson-500 hover:bg-crimson-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition flex items-center justify-center">
+            <span x-show="!modelLoading">Mulai Sekarang</span>
+            <span x-show="modelLoading" class="flex items-center">
+              <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Menyiapkan Kamera...
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: WAWANCARA / CHAT INTERFACE -->
+    <div x-show="interviewStarted && !interviewFinished" x-cloak class="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[85vh] w-full">
+      
+      <!-- KOLOM KIRI: VIDEO WEBCAM & DETEKSI -->
+      <div class="lg:col-span-5 flex flex-col space-y-4 h-full">
+        <div class="relative bg-[#212121] rounded-2xl overflow-hidden border border-gray-200 shadow-md flex-1 min-h-0 flex items-center justify-center">
+          <video x-ref="video" id="webcamVideo" autoplay muted playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+          <div class="absolute top-4 left-4 bg-black/60 px-3 py-1.5 rounded-full flex items-center space-x-2 border border-white/10">
+            <div class="w-2 h-2 rounded-full" :class="faceDetected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'"></div>
+            <span class="text-[11px] font-medium text-white" x-text="faceDetected ? 'Wajah Terdeteksi' : 'Mencari Wajah...'"></span>
+          </div>
+        </div>
+        
+        <!-- Telemetri Stres & Ekspresi -->
+        <div class="grid grid-cols-2 gap-4 flex-shrink-0">
+          <div class="glass-card rounded-xl p-4 flex flex-col items-center justify-center space-y-1 border border-gray-200">
+            <span class="text-[10px] uppercase tracking-wider text-gray-500">Tingkat Stres</span>
+            <span class="text-2xl font-bold font-mono" :class="liveTelemetry.stress > 50 ? 'text-rose-600' : 'text-emerald-600'" x-text="(liveTelemetry.stress || 0) + '%'"></span>
+          </div>
+          <div class="glass-card rounded-xl p-4 flex flex-col items-center justify-center space-y-1 border border-gray-200">
+            <span class="text-[10px] uppercase tracking-wider text-gray-500">Ekspresi Wajah</span>
+            <span class="text-sm font-semibold text-maroon-600 capitalize text-center" x-text="liveTelemetry.expression || 'Netral'"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- KOLOM KANAN: CHAT INTERFACE -->
+      <div class="lg:col-span-7 glass-card rounded-2xl border border-gray-200 flex flex-col h-full overflow-hidden">
+        
+        <!-- Header Chat -->
+        <div class="px-6 py-4 bg-maroon-600 border-b border-maroon-700 flex justify-between items-center z-10">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-white/15 rounded-full flex items-center justify-center border border-white/30 text-xl">🧑‍🏫</div>
+            <div>
+              <h2 class="text-sm font-bold text-white">Kak Rama</h2>
+              <p class="text-[11px] text-emerald-200 flex items-center">
+                <span class="w-1.5 h-1.5 bg-emerald-300 rounded-full mr-1.5 animate-pulse"></span>
+                <span x-text="aiState === 'listening' ? 'Mendengarkan...' : (aiState === 'thinking' ? 'Mengetik...' : 'Online')"></span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Area Obrolan (Chat History) -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-container">
+          <div class="flex flex-col items-start">
+            <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-gray-100 border border-gray-200 text-[#212121] rounded-bl-none">
+              <p x-text="`Halo ${studentName}! Santai aja ya obrolan kita hari ini.`"></p>
+            </div>
+          </div>
+          <template x-for="(msg, index) in chatHistory" :key="index">
+            <div class="flex flex-col" :class="msg.role === 'user' ? 'items-end' : 'items-start'">
+              <div class="max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm"
+                   :class="msg.role === 'user' ? 'bg-maroon-600 text-white rounded-br-none' : 'bg-gray-100 border border-gray-200 text-[#212121] rounded-bl-none'">
+                <p x-text="msg.content"></p>
+              </div>
+              <span class="text-[10px] text-gray-400 mt-1" x-text="msg.role === 'user' ? 'Kamu' : 'Kak Rama'"></span>
+            </div>
+          </template>
+          
+          <div x-show="aiState === 'thinking'" class="flex items-start">
+            <div class="bg-gray-100 border border-gray-200 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm">
+              <div class="flex space-x-1.5">
+                <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Area Input Teks & Voice -->
+        <div class="p-4 bg-white border-t border-gray-200">
+          <div class="flex space-x-2">
+            <button @click="toggleMic()"
+                    class="p-3 rounded-xl transition flex-shrink-0 flex items-center justify-center w-12 h-12"
+                    :class="isListening ? 'bg-rose-100 text-rose-600 border border-rose-300 animate-pulse' : 'bg-gray-100 text-gray-500 hover:text-[#212121] border border-gray-300'">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+            </button>
+            <input type="text" x-model="currentAnswerText" @keydown.enter="submitAnswer()"
+                   placeholder="Ketik curhatan lu di sini (atau pakai mic)..."
+                   class="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 text-sm text-[#212121] placeholder-gray-400 focus:outline-none focus:border-maroon-600 transition">
+            <button @click="submitAnswer()" :disabled="!currentAnswerText.trim() || aiState === 'thinking'"
+                    class="bg-crimson-500 hover:bg-crimson-600 disabled:opacity-50 text-white px-5 rounded-xl text-sm font-semibold transition flex-shrink-0 h-12">
+              Kirim
+            </button>
+          </div>
+          <p x-show="isListening" class="text-rose-600 text-[10px] mt-2 animate-pulse ml-14">Mendengarkan suaramu...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: SELESAI -->
+    <div x-show="interviewFinished && currentView === 'candidate'" x-cloak class="max-w-md mx-auto text-center glass-card p-8 rounded-2xl border border-gray-200 m-auto">
+      <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-200">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      </div>
+      <h2 class="text-2xl font-display font-bold text-[#212121] mb-2">Sesi Selesai!</h2>
+      <p class="text-gray-500 text-sm mb-6">Terima kasih <span x-text="studentName" class="font-semibold text-[#212121]"></span> sudah berbagi cerita. Kak Rama pamit dulu ya, sehat selalu!</p>
+      <button @click="window.location.reload()" class="bg-gray-100 hover:bg-gray-200 text-[#212121] px-6 py-2.5 rounded-xl text-sm font-semibold transition border border-gray-300">Kembali ke Awal</button>
+    </div>
+
+  </main>
+</div>
 
 <script>
 let INITIAL_QUESTIONS = [
@@ -114,258 +226,37 @@ let INITIAL_QUESTIONS = [
 
 let faceMeshInstance = null;
 let cameraInstance = null;
-let stressChartInstance = null;
-let audioCtx = null, analyser = null, micStream = null;
-let silenceTimer = null;
 
 function interviewApp() {
   return {
-    agreeCheckbox: false,
-    consentGiven: false,
-    modelLoading: false,
-    cameraError: null,
-    showDebug: true,
-    faceDetected: false,
-    studentName: '',
-
-    userRole: 'murid',
-    isAdminLoggedIn: false,
-    showPinModal: false,
-    inputPin: '',
-    pinError: false,
-    adminPinSecret: '1234',
-
-    roomId: 'SISWA01',
-    customQuestionsLoaded: false,
-
-  
-    activeApiProvider: 'Lokal (Smart Dynamic)',
-
-    availableVoices: [],
-    selectedVoiceIndex: 0,
-
-    currentView: 'candidate',
-    interviewStarted: false,
-    interviewFinished: false,
+    agreeCheckbox: false, consentGiven: false, modelLoading: false, faceDetected: false, studentName: '',
+    userRole: 'murid', roomId: 'SISWA01', currentView: 'candidate',
+    interviewStarted: false, interviewFinished: false,
+    readinessState: 'waiting', aiState: 'idle',
+    currentStep: 0, currentQuestionText: '', currentAnswerText: '', baseAnswerText: '',
     
-    readinessState: 'waiting', 
-    countdownNumber: 3,
-    aiState: 'idle',
-
-    currentStep: 0,
-    currentQuestionText: INITIAL_QUESTIONS[0],
-    currentAnswerText: '',
-    baseAnswerText: '',
-
-    telemetryLogs: [],
-    timelineData: [],
+    telemetryLogs: [], currentQuestionSamples: [], timelineData: [],
     liveTelemetry: { stress: 0, gaze: 'Depan', expression: 'Neutral / Santai' },
-    currentQuestionSamples: [],
-
-    currentAudioVolume: 0,
-    isListening: false,
-    recognition: null,
-
-    guruRoomId: 'SISWA02',
-    guruQuestions: ['', '', ''],
-    guruSavedRooms: [],
-    guruSaving: false,
-    guruStatusMsg: '',
-    searchFilter: '',
-
-    allStudentResults: [],
-    loadingResults: false,
-    selectedStudentDetail: null,
-
-    get avgStress() {
-      if (!this.telemetryLogs || this.telemetryLogs.length === 0) return 0;
-      const sum = this.telemetryLogs.reduce((acc, log) => acc + log.stress, 0);
-      return Math.round(sum / this.telemetryLogs.length);
-    },
-
-    get psychologicalReport() {
-      const avg = this.avgStress;
-      if (avg > 60) return "Tingkat ketegangan emosional cukup tinggi selama respons. Direkomendasikan melakukan sesi tatap muka dan konseling secara personal.";
-      if (avg > 35) return "Tingkat ketegangan emosional relatif stabil dengan sedikit lonjakan saat menjawab topik sensitif.";
-      return "Kondisi psikologis dan ketenangan emosional siswa sangat stabil dan rileks dalam menyampaikan tanggapan.";
-    },
-
-    get filteredStudentResults() {
-      if (!this.searchFilter.trim()) return this.allStudentResults;
-      const q = this.searchFilter.toLowerCase();
-      return this.allStudentResults.filter(r => 
-        (r.student_name && r.student_name.toLowerCase().includes(q)) || 
-        (r.room_id && r.room_id.toLowerCase().includes(q))
-      );
-    },
+    chatHistory: [], 
+    
+    isListening: false, recognition: null, availableVoices: [], selectedVoiceIndex: 0,
 
     async init() {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('room')) this.roomId = urlParams.get('room');
-
-      await this.fetchSoalDariKotakPos();
-      await this.loadAllStudentResults();
-
+      
       this.initSpeechRecognition();
       this.initVoiceEngine();
-      this.$watch('currentView', (val) => {
-        if (val === 'dashboard') this.$nextTick(() => this.renderChart());
-        if (val === 'teacher') {
-          this.loadAllStudentResults();
-        }
-      });
-    },
-
-    attemptAdminAccess(targetView) {
-      if (this.isAdminLoggedIn) {
-        this.currentView = targetView;
-      } else {
-        this.showPinModal = true;
-        this.pinError = false;
-        this.inputPin = '';
-      }
-    },
-
-    verifyPin() {
-      if (this.inputPin === this.adminPinSecret) {
-        this.isAdminLoggedIn = true;
-        this.userRole = 'guru';
-        this.showPinModal = false;
-        this.pinError = false;
-        this.currentView = 'teacher';
-        Swal.fire({ icon: 'success', title: 'Akses Diberikan', text: 'Selamat datang di Panel Guru BK.', timer: 1500, showConfirmButton: false });
-      } else {
-        this.pinError = true;
-      }
-    },
-
-    logoutAdmin() {
-      this.isAdminLoggedIn = false;
-      this.userRole = 'murid';
-      this.currentView = 'candidate';
-    },
-
-    async fetchSoalDariKotakPos() {
-      try {
-        const res = await fetch(`/api/kotak-pos/${this.roomId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.daftar_soal && Array.isArray(data.daftar_soal) && data.daftar_soal.length > 0) {
-            INITIAL_QUESTIONS = data.daftar_soal;
-            this.currentQuestionText = INITIAL_QUESTIONS[0];
-            this.customQuestionsLoaded = true;
-          }
-        }
-      } catch (err) {
-        console.warn("Gagal membaca Kotak Pos Backend:", err);
-      }
-    },
-
-    addGuruQuestionField() {
-      this.guruQuestions.push('');
-    },
-    removeGuruQuestionField(idx) {
-      if (this.guruQuestions.length > 1) {
-        this.guruQuestions.splice(idx, 1);
-      }
-    },
-
-    async saveQuestionsByGuru() {
-      if (!this.guruRoomId.trim()) return Swal.fire('Error', 'ID Ruangan/Siswa harus diisi!', 'warning');
-      const validQuestions = this.guruQuestions.map(q => q.trim()).filter(Boolean);
-      if (validQuestions.length === 0) return Swal.fire('Error', 'Minimal masukkan 1 pertanyaan.', 'warning');
-
-      this.guruSaving = true;
-      try {
-        const res = await fetch('/api/kotak-pos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ room_id: this.guruRoomId.trim(), daftar_soal: validQuestions })
-        });
-
-        if (!res.ok) throw new Error("Gagal menyimpan ke server");
-
-        Swal.fire('Berhasil!', `Soal untuk Room "${this.guruRoomId.trim()}" telah tersimpan!`, 'success');
-      } catch(err) {
-        Swal.fire('Gagal', "Error simpan: " + err.message, 'error');
-      } finally {
-        this.guruSaving = false;
-      }
-    },
-
-    async loadAllStudentResults() {
-      this.loadingResults = true;
-      try {
-        const res = await fetch('/api/interviews');
-        if (res.ok) {
-          this.allStudentResults = await res.json();
-        }
-      } catch (err) {
-        console.error("Gagal memuat rekap wawancara:", err);
-      } finally {
-        this.loadingResults = false;
-      }
-    },
-
-    async deleteStudentResult(id) {
-      const confirm = await Swal.fire({
-        title: 'Hapus Laporan?',
-        text: 'Data hasil wawancara ini akan dihapus permanen.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Ya, Hapus'
-      });
-
-      if (confirm.isConfirmed) {
-        try {
-          const res = await fetch(`/api/interviews/${id}`, { method: 'DELETE' });
-          if (res.ok) {
-            Swal.fire('Terhapus!', 'Data laporan telah dihapus.', 'success');
-            await this.loadAllStudentResults();
-          }
-        } catch(e) {
-          Swal.fire('Error', 'Gagal menghapus data.', 'error');
-        }
-      }
-    },
-
-    viewStudentDetail(item) {
-      this.selectedStudentDetail = item;
-      this.studentName = item.student_name;
-      this.telemetryLogs = item.telemetry_logs || [];
-      this.currentView = 'dashboard';
     },
 
     initVoiceEngine() {
       const loadVoices = () => {
         if ('speechSynthesis' in window) {
-          this.availableVoices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('id') || v.lang.startsWith('jv') || v.lang.startsWith('ms'));
-          if (this.availableVoices.length === 0) {
-            this.availableVoices = window.speechSynthesis.getVoices();
-          }
+          this.availableVoices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('id'));
         }
       };
       loadVoices();
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-      }
-    },
-
-    correctSpeechText(rawText) {
-      if (!rawText) return '';
-      let text = rawText;
-      const corrections = [
-        [/\b(inyong|nyong)\b/gi, 'inyong'],
-        [/\b(rika|dika)\b/gi, 'rika'],
-        [/\b(kepriwe|kepriben)\b/gi, 'kepriwe'],
-        [/\b(boroing|powring|sporing)\b/gi, 'boring'],
-        [/\b(ga tau|gatau)\b/gi, 'tidak tahu'],
-        [/\b(cape|capek)\b/gi, 'capek'],
-      ];
-      corrections.forEach(([regex, replacement]) => { text = text.replace(regex, replacement); });
-      return text;
+      if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = loadVoices;
     },
 
     initSpeechRecognition() {
@@ -378,830 +269,166 @@ function interviewApp() {
 
         this.recognition.onresult = (event) => {
           if ('speechSynthesis' in window && window.speechSynthesis.speaking) return;
-
-          let interimTranscript = '';
-          let finalTranscript = '';
-
+          let interimTranscript = ''; let finalTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
             else interimTranscript += event.results[i][0].transcript;
           }
-
-          const rawCombined = (finalTranscript || interimTranscript).trim();
-          const autoCorrectedSpeech = this.correctSpeechText(rawCombined);
-
-          if (this.readinessState === 'waiting') {
-            const textLower = autoCorrectedSpeech.toLowerCase();
-            const keywords = ['siap', 'sudah', 'ya', 'oke', 'ok', 'mulai', 'ready', 'bisa', 'wis'];
-            if (keywords.some(kw => textLower.includes(kw))) {
-              this.confirmReadiness();
-              return;
-            }
-          }
-
           if (finalTranscript) {
-            const correctedFinal = this.correctSpeechText(finalTranscript);
-            this.baseAnswerText = this.baseAnswerText ? (this.baseAnswerText + ' ' + correctedFinal) : correctedFinal;
+            this.baseAnswerText = this.baseAnswerText ? (this.baseAnswerText + ' ' + finalTranscript) : finalTranscript;
             this.currentAnswerText = this.baseAnswerText;
           } else if (interimTranscript) {
-            const correctedInterim = this.correctSpeechText(interimTranscript);
-            this.currentAnswerText = this.baseAnswerText ? (this.baseAnswerText + ' ' + correctedInterim) : correctedInterim;
-          }
-
-          clearTimeout(silenceTimer);
-          if (this.readinessState === 'active' && this.currentAnswerText.trim().length >= 10) {
-            silenceTimer = setTimeout(() => { 
-              if (!window.speechSynthesis.speaking && this.isListening) {
-                this.submitAnswer(); 
-              }
-            }, 7000); 
+            this.currentAnswerText = this.baseAnswerText ? (this.baseAnswerText + ' ' + interimTranscript) : interimTranscript;
           }
         };
-
         this.recognition.onerror = () => { this.isListening = false; };
-        this.recognition.onend = () => {
-          if (this.isListening && this.aiState === 'listening' && !window.speechSynthesis.speaking) { 
-            try { this.recognition.start(); } catch(e){} 
-          }
-        };
+        this.recognition.onend = () => { if (this.isListening && !window.speechSynthesis.speaking) try { this.recognition.start(); } catch(e){} };
       }
     },
 
     async startListening() {
-      if (!this.recognition) return;
-      if ('speechSynthesis' in window && window.speechSynthesis.speaking) return;
-      this.isListening = true;
-      this.aiState = 'listening';
-      try {
-        this.recognition.start();
-        this.startAudioWaveform();
-      } catch(e) {}
+      if (!this.recognition || ('speechSynthesis' in window && window.speechSynthesis.speaking)) return;
+      this.isListening = true; this.aiState = 'listening';
+      try { this.recognition.start(); } catch(e) {}
     },
 
     stopListening() {
       this.isListening = false;
-      if (this.recognition) {
-        try { this.recognition.stop(); } catch(e) {}
-      }
-    },
-
-    async startAudioWaveform() {
-      try {
-        if (!micStream) {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-        if (!audioCtx) {
-          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          analyser = audioCtx.createAnalyser();
-          const source = audioCtx.createMediaStreamSource(micStream);
-          source.connect(analyser);
-          analyser.fftSize = 64;
-        }
-        this.drawWaveform();
-      } catch(err) {}
-    },
-
-    drawWaveform() {
-      const canvas = this.$refs.waveCanvas;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
-      const draw = () => {
-        if (!this.isListening) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          this.currentAudioVolume = 0;
-          return;
-        }
-        requestAnimationFrame(draw);
-        analyser.getByteFrequencyData(dataArray);
-
-        let sumVol = 0;
-        for (let i = 0; i < bufferLength; i++) sumVol += dataArray[i];
-        this.currentAudioVolume = Math.round(sumVol / bufferLength);
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const barWidth = (canvas.width / bufferLength) * 1.8;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-          const barHeight = (dataArray[i] / 255) * canvas.height;
-          ctx.fillStyle = '#34E3A1';
-          ctx.fillRect(x, (canvas.height - barHeight) / 2, barWidth - 2, barHeight);
-          x += barWidth;
-        }
-      };
-      draw();
+      if (this.recognition) try { this.recognition.stop(); } catch(e) {}
     },
 
     toggleMic() {
-      if (!this.recognition) return Swal.fire('Peringatan', 'Browser tidak mendukung Speech Recognition.', 'info');
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (!this.recognition) return Swal.fire('Error', 'Browser tidak mendukung Voice Input.', 'info');
       if (this.isListening) {
-        this.stopListening();
-        this.aiState = 'idle';
-        this.baseAnswerText = this.currentAnswerText.trim();
+        this.stopListening(); this.aiState = 'idle'; this.baseAnswerText = this.currentAnswerText.trim();
       } else {
-        this.baseAnswerText = this.currentAnswerText.trim();
-        this.startListening();
+        this.baseAnswerText = this.currentAnswerText.trim(); this.startListening();
       }
     },
 
-    clearAnswerText() {
-      this.currentAnswerText = '';
-      this.baseAnswerText = '';
-      clearTimeout(silenceTimer);
+    scrollToBottom() {
+      setTimeout(() => {
+        const container = document.getElementById('chat-container');
+        if (container) container.scrollTop = container.scrollHeight;
+      }, 100);
     },
 
     speakQuestion(text, onEndCallback = null) {
       if ('speechSynthesis' in window) {
-        this.stopListening();
-        window.speechSynthesis.cancel();
-
+        this.stopListening(); window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 0.95;
-
-        if (this.availableVoices.length > 0 && this.availableVoices[this.selectedVoiceIndex]) {
-          utterance.voice = this.availableVoices[this.selectedVoiceIndex];
-        }
-
+        if (this.availableVoices.length > 0) utterance.voice = this.availableVoices[0];
+        
         utterance.onstart = () => { this.aiState = 'speaking'; };
         utterance.onend = () => {
           this.aiState = 'idle';
-          if (onEndCallback) {
-            onEndCallback();
-          } else if (this.readinessState === 'active' || this.readinessState === 'waiting') {
-            setTimeout(() => { this.startListening(); }, 400);
-          }
+          if (onEndCallback) onEndCallback();
         };
-
         window.speechSynthesis.speak(utterance);
-      } else if (onEndCallback) {
-        onEndCallback();
-      }
+      } else if (onEndCallback) onEndCallback();
     },
 
     async giveConsent() {
-      if (!this.studentName.trim()) {
-        return Swal.fire({ icon: 'warning', title: 'Nama Wajib Diisi', text: 'Silakan isi nama lengkap kamu sebelum memulai.' });
-      }
-      if (!this.agreeCheckbox) return;
-      this.cameraError = null;
       this.modelLoading = true;
       try {
-        this.consentGiven = true;
-        await this.$nextTick();
-        await new Promise(r => setTimeout(r, 100));
+        this.consentGiven = true; await this.$nextTick();
+        await new Promise(r => setTimeout(r, 200));
         await this.setupFaceMesh();
         this.modelLoading = false;
-        this.initReadinessPhase();
+        
+        this.interviewStarted = true;
+        this.currentStep = 0;
+        this.currentQuestionText = INITIAL_QUESTIONS[0];
+        
+        this.chatHistory.push({ role: 'assistant', content: this.currentQuestionText });
+        this.speakQuestion(this.currentQuestionText);
+        
       } catch (err) {
-        this.modelLoading = false;
-        this.consentGiven = false;
-        this.cameraError = "Gagal memuat Kamera / MediaPipe: " + (err.message || err);
+        this.modelLoading = false; this.consentGiven = false;
+        Swal.fire('Kamera Error', 'Izinkan akses kamera terlebih dahulu.', 'error');
       }
-    },
-
-    initReadinessPhase() {
-      this.readinessState = 'waiting';
-      this.interviewStarted = false;
-      this.interviewFinished = false;
-      this.speakQuestion(`Halo ${this.studentName}! Apakah kamu sudah siap untuk mulai mengobrol santai hari ini?`);
-    },
-
-    confirmReadiness() {
-      if (this.readinessState !== 'waiting') return;
-      this.stopListening();
-      this.readinessState = 'counting';
-      
-      this.speakQuestion("Oke, bagus! Mari kita mulai ya.", () => {
-        this.aiState = 'thinking';
-        this.countdownNumber = 3;
-        const interval = setInterval(() => {
-          this.countdownNumber--;
-          if (this.countdownNumber <= 0) {
-            clearInterval(interval);
-            this.startActualInterview();
-          }
-        }, 1000);
-      });
-    },
-
-    startActualInterview() {
-      this.readinessState = 'active';
-      this.interviewStarted = true;
-      this.interviewFinished = false;
-      this.currentStep = 0;
-      this.currentQuestionText = INITIAL_QUESTIONS[0];
-      this.clearAnswerText();
-      this.currentQuestionSamples = [];
-      this.telemetryLogs = [];
-      this.timelineData = [];
-      this.speakQuestion(this.currentQuestionText);
-    },
-
-    async generateAIResponse(userAnswer) {
-      const promptText = `Kamu adalah pewawancara AI sekolah yang ramah dan empati. Siswa baru saja menjawab: "${userAnswer}". Berikan 1 kalimat tanggapan natural yang merespon isi jawabannya, lalu ikuti dengan 1 kalimat pertanyaan eksplorasi yang relevan. Jika siswa menjawab tidak peduli/cuek, tanggapi dengan santai dan tidak memaksa. Maksimal 2 kalimat.`;
-
-      if (this.groqApiKey && this.groqApiKey.trim()) {
-        try {
-          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${this.groqApiKey.trim()}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
-              messages: [{ role: 'system', content: 'Kamu pewawancara AI konseling yang empati dan ramah.' }, { role: 'user', content: promptText }],
-              temperature: 0.7,
-              max_tokens: 120
-            })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const text = data.choices[0]?.message?.content;
-            if (text) {
-              this.activeApiProvider = 'Groq (Llama 3.3)';
-              return text.trim();
-            }
-          }
-        } catch (e) {
-          console.warn("Groq API error, mencoba Gemini...", e);
-        }
-      }
-
-      if (this.geminiApiKey && this.geminiApiKey.trim()) {
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiApiKey.trim()}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              this.activeApiProvider = 'Gemini 1.5 Flash';
-              return text.trim();
-            }
-          }
-        } catch (e) {
-          console.warn("Gemini API error, beralih ke respons dinamis lokal...", e);
-        }
-      }
-
-      this.activeApiProvider = 'Lokal (Smart Dynamic)';
-      return this.generateContextualFeedback(userAnswer);
-    },
-
-    generateContextualFeedback(userAnswer) {
-      if (!userAnswer || userAnswer.trim().length < 2) {
-        return "Terima kasih sudah merespon. Mari kita lanjut ke topik selanjutnya.";
-      }
-
-      const lower = userAnswer.toLowerCase().trim();
-      const indifferentKeywords = ['dont care', "don't care", 'ga tau', 'gak tau', 'nggak tau', 'tidak tahu', 'terserah', 'bebas', 'biasa aja', 'males', 'gatau', 'bodo amat', 'bisa aja', 'enggak tau'];
-      if (indifferentKeywords.some(kw => lower.includes(kw))) {
-        return "Gak apa-apa kok kalau kamu belum berminat cerita atau bingung soal itu. Santai aja ya!";
-      }
-
-      const stopWords = new Set([
-        'yang','dan','di','ke','dari','ini','itu','dengan','untuk','pada','adalah','sebagai','akan','bisa','ada',
-        'tidak','tahu','gak','ga','nggak','bikin','saya','aku','kamu','dia','mereka','kita','don','dont','care',
-        'just','like','about','the','and','for','you','your','with','have','that','this','apa','aja'
-      ]);
-
-      const words = lower.replace(/[^a-z0-9\s]/gi, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
-
-      if (lower.includes('stres') || lower.includes('capek') || lower.includes('boring') || lower.includes('pusing') || lower.includes('lelah')) {
-        return "Aku paham banget kalau kamu merasa capek atau tertekan saat ini. Wajar banget kok merasa begitu.";
-      } 
-      if (lower.includes('senang') || lower.includes('seru') || lower.includes('asik') || lower.includes('suka') || lower.includes('bahagia')) {
-        return "Wah, terdengar menyenangkan sekali! Pengalaman positif seperti itu memang bikin suasana hati lebih baik.";
-      } 
-      if (lower.includes('target') || lower.includes('ingin') || lower.includes('cita') || lower.includes('raih') || lower.includes('rencana')) {
-        return "Target yang sangat bagus! Punya rencana atau harapan ke depan itu langkah awal yang hebat.";
-      }
-
-      if (words.length > 0) {
-        const keyword = words[Math.floor(Math.random() * words.length)];
-        return `Terima kasih sudah mau berbagi cerita tentang ${keyword}.`;
-      }
-
-      return "Terima kasih sudah menyampaikan jawabanmu dengan jujur.";
     },
 
     async setupFaceMesh() {
-      const videoElement = this.$refs.video || document.getElementById('webcamVideo') || document.querySelector('video');
-      if (!videoElement) throw new Error("Elemen video belum siap.");
-
+      const videoElement = this.$refs.video;
+      if (!videoElement) throw new Error("Video element missing");
       faceMeshInstance = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
       faceMeshInstance.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-
       faceMeshInstance.onResults((results) => {
         if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-          this.faceDetected = true;
-          this.analyzeLandmarks(results.multiFaceLandmarks[0]);
+          this.faceDetected = true; this.analyzeLandmarks(results.multiFaceLandmarks[0]);
         } else {
-          this.faceDetected = false;
-          this.liveTelemetry = { stress: 0, gaze: 'Depan', expression: 'Neutral / Santai' };
+          this.faceDetected = false; this.liveTelemetry = { stress: 0, gaze: 'Depan', expression: 'Neutral / Santai' };
         }
       });
-
       cameraInstance = new Camera(videoElement, {
-        onFrame: async () => {
-          if (videoElement && videoElement.readyState >= 2) {
-            await faceMeshInstance.send({ image: videoElement });
-          }
-        },
+        onFrame: async () => { if (videoElement && videoElement.readyState >= 2) await faceMeshInstance.send({ image: videoElement }); },
         width: 640, height: 480
       });
-
       await cameraInstance.start();
     },
 
-    dist(p1, p2) {
-      return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + Math.pow(p1.z - p2.z, 2));
-    },
+    dist(p1, p2) { return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)); },
 
     analyzeLandmarks(lm) {
       const leftEyeOuter = lm[33], rightEyeOuter = lm[263];
       const eyeDist = this.dist(leftEyeOuter, rightEyeOuter);
-      if (!eyeDist || eyeDist === 0) return;
-
-      const browInnerDistRatio = this.dist(lm[55], lm[285]) / eyeDist;
-      const leftBrowEyeGap = (lm[159].y - lm[70].y) / eyeDist;
-      const rightBrowEyeGap = (lm[386].y - lm[300].y) / eyeDist;
-      const avgBrowEyeGap = (leftBrowEyeGap + rightBrowEyeGap) / 2;
-
-      let browDownScore = 0;
-      if (browInnerDistRatio < 0.38 || avgBrowEyeGap < 0.15) {
-        const distDiff = Math.max(0, 0.38 - browInnerDistRatio);
-        const gapDiff = Math.max(0, 0.15 - avgBrowEyeGap);
-        browDownScore = Math.min(100, Math.round((distDiff * 450) + (gapDiff * 550)));
-      }
-
-      const mouthLeft = lm[61], mouthRight = lm[291];
-      const mouthWidthRatio = this.dist(mouthLeft, mouthRight) / eyeDist;
-      const mouthCenterY = (lm[13].y + lm[14].y) / 2;
-      const mouthCornersAvgY = (mouthLeft.y + mouthRight.y) / 2;
-      const mouthCornerLift = (mouthCenterY - mouthCornersAvgY) / eyeDist;
-      const mouthOpenRatio = this.dist(lm[13], lm[14]) / eyeDist;
-
-      let smileScore = 0;
-      if (mouthCornerLift > 0.015 && browDownScore < 30) smileScore = Math.min(100, Math.max(0, Math.round(mouthCornerLift * 1200)));
-
-      let grimaceScore = 0;
-      if (mouthWidthRatio > 0.73 && mouthCornerLift <= 0.015) grimaceScore = Math.min(100, Math.max(0, Math.round((mouthWidthRatio - 0.70) * 450)));
-
-      let mouthFrownScore = 0;
-      if (mouthCornerLift < -0.01) mouthFrownScore = Math.min(100, Math.max(0, Math.round(Math.abs(mouthCornerLift) * 1000)));
-
-      let expression = 'Neutral / Santai';
-      let stressBase = 0;
-
-      if (browDownScore > 35 && (grimaceScore > 20 || mouthOpenRatio > 0.08)) {
-        expression = 'Tegang / Meringis'; stressBase = 75 + Math.round(browDownScore * 0.25);
-      } else if (browDownScore > 35) {
-        expression = 'Marah / Kesal'; stressBase = 65 + Math.round(browDownScore * 0.3);
-      } else if (grimaceScore > 30) {
-        expression = 'Tegang / Unjuk Gigi'; stressBase = 55 + Math.round(grimaceScore * 0.3);
-      } else if (smileScore > 20) {
-        expression = 'Ceria / Senang'; stressBase = Math.max(0, 20 - Math.round(smileScore * 0.3));
-      } else if (mouthFrownScore > 25) {
-        expression = 'Gelisah / Khawatir'; stressBase = 40 + Math.round(mouthFrownScore * 0.4);
-      } else {
-        stressBase = 15 + Math.round(browDownScore * 0.3);
-      }
-
-      let stress = Math.round(Math.min(100, Math.max(0, stressBase)));
-
-      const noseTip = lm[1];
-      const eyeCenter = (leftEyeOuter.x + rightEyeOuter.x) / 2;
-      let gaze = 'Depan';
-      if (noseTip.x < eyeCenter - 0.035) gaze = 'Kanan';
-      else if (noseTip.x > eyeCenter + 0.035) gaze = 'Kiri';
-
-      this.liveTelemetry = { stress, gaze, expression };
-
-      if (this.readinessState === 'active' && !this.interviewFinished) {
-        this.currentQuestionSamples.push({ ...this.liveTelemetry });
-        this.timelineData.push({
-          time: new Date().toLocaleTimeString('id-ID'),
-          stress: stress,
-          questionMark: `Topik ${this.currentStep + 1}`
-        });
-      }
+      if (!eyeDist) return;
+      const mouthWidthRatio = this.dist(lm[61], lm[291]) / eyeDist;
+      
+      let stress = 15; let expression = 'Neutral / Santai';
+      if (mouthWidthRatio > 0.7) { expression = 'Tegang / Meringis'; stress = 65; }
+      else if (mouthWidthRatio > 0.6) { expression = 'Ceria / Senang'; stress = 10; }
+      
+      this.liveTelemetry = { stress, gaze: 'Depan', expression };
+      if (this.interviewStarted && !this.interviewFinished) this.currentQuestionSamples.push({ ...this.liveTelemetry });
     },
 
     async submitAnswer() {
-      clearTimeout(silenceTimer);
       const answer = this.currentAnswerText.trim();
-      if (!answer) {
-        return Swal.fire({ icon: 'warning', title: 'Jawaban Kosong', text: 'Harap ucapkan atau ketik jawaban sebelum lanjut.' });
-      }
+      if (!answer) return;
 
       this.stopListening();
       this.aiState = 'thinking';
-
-      let samples = this.currentQuestionSamples;
-      if (samples.length === 0) samples = [{ ...this.liveTelemetry }];
-
-      const avgStress = Math.round(samples.reduce((acc, s) => acc + s.stress, 0) / samples.length);
-      const exprCounts = {};
-      samples.forEach(s => { exprCounts[s.expression] = (exprCounts[s.expression] || 0) + 1; });
-      const dominantExpression = Object.keys(exprCounts).reduce((a, b) => exprCounts[a] > exprCounts[b] ? a : b, 'Neutral / Santai');
-
-      this.telemetryLogs.push({
-        questionNumber: this.currentStep + 1,
-        question: this.currentQuestionText,
-        answer: answer,
-        stress: avgStress,
-        expression: dominantExpression,
-        gaze: this.liveTelemetry.gaze
-      });
+      
+      this.chatHistory.push({ role: 'user', content: answer });
+      this.currentAnswerText = ''; this.baseAnswerText = '';
+      this.scrollToBottom();
 
       const feedback = await this.generateAIResponse(answer);
+      
+      this.chatHistory.push({ role: 'assistant', content: feedback });
+      this.scrollToBottom();
 
       this.speakQuestion(feedback, async () => {
         this.currentStep++;
         if (this.currentStep < INITIAL_QUESTIONS.length) {
           this.currentQuestionText = INITIAL_QUESTIONS[this.currentStep];
-          this.clearAnswerText();
-          this.currentQuestionSamples = [];
+          this.chatHistory.push({ role: 'assistant', content: this.currentQuestionText });
+          this.scrollToBottom();
           this.speakQuestion(this.currentQuestionText);
         } else {
           this.interviewFinished = true;
-          this.stopListening();
-          await this.saveResultToBackend();
+          this.saveResultToBackend();
         }
       });
+    },
+
+    async generateAIResponse(userAnswer) {
+      const lower = userAnswer.toLowerCase();
+      await new Promise(r => setTimeout(r, 1500)); 
+      if (lower.includes('stres') || lower.includes('capek')) return "Gua paham bro, wajar banget ngerasa capek.";
+      if (lower.includes('senang') || lower.includes('seru')) return "Wah mantap tuh, ikut seneng dengernya!";
+      return "Oke, thanks udah mau cerita santai soal ini.";
     },
 
     async saveResultToBackend() {
-      Swal.fire({ title: 'Menyimpan Laporan...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-      try {
-        const payload = {
-          student_name: this.studentName,
-          room_id: this.roomId || 'SISWA01',
-          avg_stress: this.avgStress,
-          telemetry_logs: this.telemetryLogs,
-          psychological_report: this.psychologicalReport
-        };
-
-        const res = await fetch('/api/interviews', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) throw new Error("Gagal menyimpan data ke database server");
-
-        Swal.fire({
-          icon: 'success',
-          title: 'Wawancara Selesai!',
-          text: 'Data laporan berhasil disimpan ke Database Backend.',
-          confirmButtonText: 'Lihat Dashboard Hasil'
-        }).then(() => {
-          this.currentView = 'dashboard';
-        });
-      } catch(err) {
-        Swal.fire({ icon: 'error', title: 'Error Koneksi', text: err.message });
-      }
-    },
-
-    renderChart() {
-      const ctx = document.getElementById('stressChart');
-      if (!ctx) return;
-      if (stressChartInstance) stressChartInstance.destroy();
-
-      const labels = this.telemetryLogs.map((_, i) => `Soal ${i + 1}`);
-      const stressData = this.telemetryLogs.map(l => l.stress);
-
-      stressChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Tingkat Stres Emosional (%)',
-            data: stressData,
-            borderColor: '#4FD1E8',
-            backgroundColor: 'rgba(79, 209, 232, 0.15)',
-            borderWidth: 3,
-            fill: true,
-            tension: 0.35,
-            pointBackgroundColor: '#34E3A1',
-            pointRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { labels: { color: '#94a3b8', font: { family: 'Inter' } } }
-          },
-          scales: {
-            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
-            y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
-          }
-        }
-      });
-    },
-
-    exportToExcel() {
-      if (this.allStudentResults.length === 0) return Swal.fire('Info', 'Tidak ada data untuk diekspor', 'info');
-      const dataToExport = this.allStudentResults.map(item => ({
-        'Waktu Wawancara': new Date(item.created_at).toLocaleString('id-ID'),
-        'Nama Siswa': item.student_name,
-        'Room ID': item.room_id,
-        'Rata-Rata Stres (%)': item.avg_stress,
-        'Laporan Psikologis': item.psychological_report
-      }));
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Rekap Wawancara");
-      XLSX.writeFile(wb, `Rekap_Wawancara_Siswa_${new Date().toISOString().slice(0,10)}.xlsx`);
-    },
-
-    exportPDF() {
-      const element = document.getElementById('reportPdfContainer');
-      if (!element) return;
-      html2pdf().from(element).save(`Laporan_Wawancara_${this.studentName.replace(/\s+/g, '_')}.pdf`);
+      if (cameraInstance) cameraInstance.stop();
+      Swal.fire({ title: 'Menyimpan...', icon: 'success', timer: 1500, showConfirmButton: false });
     }
   }
 }
 </script>
-</head>
-<body x-data="interviewApp()" x-cloak class="min-h-screen flex flex-col justify-between">
-
-  <!-- Header Navigation -->
-  <header class="bg-ink-900 border-b border-ink-700 px-6 py-4 flex items-center justify-between shadow-lg">
-    <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-signal-500 to-calm-400 flex items-center justify-center font-bold text-ink-950 font-display">
-        AI
-      </div>
-      <span class="font-display font-bold text-lg text-white tracking-wide">AI Counselor BK</span>
-    </div>
-
-    <div class="flex items-center space-x-3">
-      <template x-if="userRole === 'murid'">
-        <button @click="attemptAdminAccess('teacher')" class="bg-ink-800 hover:bg-ink-700 text-slate-300 text-xs font-semibold px-4 py-2 rounded-lg border border-ink-600 transition flex items-center space-x-2">
-          <span>🔒 Panel Guru BK</span>
-        </button>
-      </template>
-
-      <template x-if="userRole === 'guru'">
-        <div class="flex items-center space-x-2">
-          <button @click="currentView = 'candidate'" :class="currentView === 'candidate' ? 'bg-signal-500 text-ink-950 font-semibold' : 'bg-ink-800 text-slate-300 hover:bg-ink-700'" class="text-xs px-3 py-2 rounded-lg transition">Sesi Wawancara</button>
-          <button @click="currentView = 'teacher'" :class="currentView === 'teacher' ? 'bg-signal-500 text-ink-950 font-semibold' : 'bg-ink-800 text-slate-300 hover:bg-ink-700'" class="text-xs px-3 py-2 rounded-lg transition">Kelola Soal & Rekap</button>
-          <button @click="logoutAdmin()" class="bg-alert-500/20 text-alert-400 hover:bg-alert-500/30 text-xs px-3 py-2 rounded-lg transition border border-alert-500/30">Keluar Admin</button>
-        </div>
-      </template>
-    </div>
-  </header>
-
-  <!-- Main Container -->
-  <main class="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full">
-
-    <!-- VIEW 1: CANDIDATE INTERVIEW INTERFACE -->
-    <div x-show="currentView === 'candidate'" class="space-y-6">
-
-      <!-- Consent / Entry Screen -->
-      <div x-show="!consentGiven" class="max-w-xl mx-auto bg-ink-850 p-6 md:p-8 rounded-2xl border border-ink-700 shadow-2xl space-y-6">
-        <h2 class="text-2xl font-bold font-display text-white">Selamat Datang di Sesi Konseling</h2>
-        <p class="text-sm text-slate-400">Silakan isi nama kamu dan aktifkan izin kamera untuk memulai analisis wawancara AI secara dinamis.</p>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Nama Lengkap Siswa</label>
-            <input type="text" x-model="studentName" placeholder="Masukkan nama kamu..." class="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-signal-400">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Room ID</label>
-            <input type="text" x-model="roomId" class="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-3 text-sm text-slate-400">
-          </div>
-
-          <div class="flex items-start space-x-3 pt-2">
-            <input type="checkbox" id="consentCheck" x-model="agreeCheckbox" class="mt-1 rounded bg-ink-900 border-ink-700 text-signal-500 focus:ring-0">
-            <label for="consentCheck" class="text-xs text-slate-400 leading-relaxed">Saya menyetujui penggunaan kamera dan mikrofon untuk analisis gestur dan transkrip wawancara secara otomatis.</label>
-          </div>
-        </div>
-
-        <button @click="giveConsent()" :disabled="!agreeCheckbox || !studentName.trim()" :class="(!agreeCheckbox || !studentName.trim()) ? 'opacity-50 cursor-not-allowed bg-ink-700 text-slate-500' : 'bg-signal-500 hover:bg-signal-400 text-ink-950 font-bold'" class="w-full py-3.5 rounded-xl transition font-display shadow-lg">
-          <span x-show="!modelLoading">Mulai Sesi Wawancara</span>
-          <span x-show="modelLoading">Menyiapkan Kamera...</span>
-        </button>
-
-        <p x-show="cameraError" class="text-xs text-alert-400 bg-alert-500/10 p-3 rounded-lg border border-alert-500/20" x-text="cameraError"></p>
-      </div>
-
-      <!-- Active Interview Workspace -->
-      <div x-show="consentGiven" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        <!-- Left Column: Video & Telemetry -->
-        <div class="lg:col-span-5 space-y-4">
-          <div class="relative bg-ink-900 rounded-2xl overflow-hidden border border-ink-700 aspect-video shadow-xl">
-            <video ref="video" id="webcamVideo" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
-
-            <!-- Face Mesh Status Badge -->
-            <div class="absolute top-3 left-3 bg-ink-950/80 backdrop-blur border border-ink-700 px-3 py-1.5 rounded-full flex items-center space-x-2">
-              <span class="status-dot" :class="faceDetected ? 'bg-calm-400' : 'bg-alert-400'"></span>
-              <span class="text-xs font-mono" x-text="faceDetected ? 'Wajah Terdeteksi' : 'Wajah Tidak Terdeteksi'"></span>
-            </div>
-          </div>
-
-          <!-- Live Telemetry Card -->
-          <div class="bg-ink-850 p-4 rounded-xl border border-ink-700 grid grid-cols-3 gap-3 text-center">
-            <div>
-              <span class="block text-[10px] uppercase tracking-wider text-slate-400">Stres</span>
-              <span class="text-lg font-bold font-mono text-signal-400" x-text="liveTelemetry.stress + '%'"></span>
-            </div>
-            <div>
-              <span class="block text-[10px] uppercase tracking-wider text-slate-400">Pandangan</span>
-              <span class="text-lg font-bold font-mono text-white" x-text="liveTelemetry.gaze"></span>
-            </div>
-            <div>
-              <span class="block text-[10px] uppercase tracking-wider text-slate-400">Ekspresi</span>
-              <span class="text-xs font-semibold text-slate-300 mt-1 block truncate" x-text="liveTelemetry.expression"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Column: Orb AI & Chat Box -->
-        <div class="lg:col-span-7 bg-ink-850 p-6 rounded-2xl border border-ink-700 flex flex-col justify-between shadow-xl space-y-6">
-
-          <!-- Dynamic Orb Visualizer -->
-          <div class="flex flex-col items-center justify-center py-4">
-            <div class="orb-wrap">
-              <div class="orb-core" :class="'state-' + aiState"></div>
-              <div class="orb-ring r1"></div>
-              <div class="orb-ring r2"></div>
-              <div class="orb-ring r3"></div>
-            </div>
-            <span class="text-xs font-mono text-slate-400 mt-3 uppercase tracking-widest" x-text="aiState"></span>
-          </div>
-
-          <!-- Question Display -->
-          <div class="bg-ink-900/90 p-5 rounded-xl border border-ink-700 space-y-2">
-            <span class="text-[11px] font-mono text-signal-400 uppercase tracking-wider">Pertanyaan Pewawancara</span>
-            <p class="text-base md:text-lg font-medium text-white leading-relaxed" x-text="currentQuestionText"></p>
-          </div>
-
-          <!-- Student Input Box -->
-          <div class="space-y-3">
-            <div class="flex items-center justify-between text-xs text-slate-400">
-              <span>Jawaban Anda (Transkrip Suara / Teks):</span>
-              <button @click="clearAnswerText()" class="hover:text-white transition">Bersihkan Teks</button>
-            </div>
-            
-            <textarea x-model="currentAnswerText" @keydown.enter.prevent="submitAnswer()" rows="3" placeholder="Ketik jawaban di sini atau aktifkan mikrofon..." class="w-full bg-ink-900 border border-ink-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-signal-400 resize-none"></textarea>
-
-            <div class="flex items-center justify-between gap-3">
-              <button @click="toggleMic()" :class="isListening ? 'bg-calm-500 text-ink-950 font-bold' : 'bg-ink-800 text-slate-300 hover:bg-ink-700 border border-ink-600'" class="px-4 py-2.5 rounded-xl text-xs font-semibold transition flex items-center space-x-2">
-                <span x-text="isListening ? '🎤 Mikrofon Aktif' : '🎙️ Aktifkan Mikrofon'"></span>
-              </button>
-
-              <button @click="submitAnswer()" class="bg-signal-500 hover:bg-signal-400 text-ink-950 font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-lg">
-                Kirim Jawaban (Enter)
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-    <!-- VIEW 2: DASHBOARD RESULT -->
-    <div x-show="currentView === 'dashboard'" class="space-y-6">
-      <div id="reportPdfContainer" class="bg-ink-850 p-6 md:p-8 rounded-2xl border border-ink-700 space-y-6 shadow-2xl">
-        <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-ink-700 pb-4 gap-4">
-          <div>
-            <h2 class="text-2xl font-bold font-display text-white" x-text="'Laporan Wawancara: ' + studentName"></h2>
-            <p class="text-xs text-slate-400 font-mono mt-1" x-text="'Room: ' + roomId + ' | Rata-Rata Stres: ' + avgStress + '%'"></p>
-          </div>
-          <button @click="exportPDF()" class="bg-signal-500 hover:bg-signal-400 text-ink-950 font-bold text-xs px-4 py-2.5 rounded-lg transition self-start md:self-auto">Unduh PDF</button>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div class="lg:col-span-7 bg-ink-900 p-4 rounded-xl border border-ink-700 h-64">
-            <canvas id="stressChart"></canvas>
-          </div>
-          <div class="lg:col-span-5 bg-ink-900 p-4 rounded-xl border border-ink-700 space-y-3">
-            <span class="text-xs font-mono text-signal-400 uppercase">Ringkasan Psikologis BK</span>
-            <p class="text-sm text-slate-300 leading-relaxed" x-text="psychologicalReport"></p>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <h3 class="text-base font-bold text-white">Detail Log Wawancara</h3>
-          <div class="space-y-3">
-            <template x-for="(log, index) in telemetryLogs" :key="index">
-              <div class="bg-ink-900 p-4 rounded-xl border border-ink-700 space-y-2">
-                <span class="text-xs font-mono text-signal-400" x-text="'Soal ' + log.questionNumber + ': ' + log.question"></span>
-                <p class="text-sm text-slate-200" x-text="'Jawaban: ' + log.answer"></p>
-                <div class="flex items-center space-x-4 text-xs font-mono text-slate-400">
-                  <span x-text="'Stres: ' + log.stress + '%'"></span>
-                  <span x-text="'Ekspresi: ' + log.expression"></span>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- VIEW 3: TEACHER PANEL -->
-    <div x-show="currentView === 'teacher'" class="space-y-8">
-      
-      <!-- Box 1: Kelola Soal Kotak Pos -->
-      <div class="bg-ink-850 p-6 rounded-2xl border border-ink-700 space-y-4 shadow-xl">
-        <h2 class="text-xl font-bold font-display text-white">Kelola Kotak Pos (Soal Khusus)</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input type="text" x-model="guruRoomId" placeholder="Room ID Siswa..." class="bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white">
-          <button @click="saveQuestionsByGuru()" :disabled="guruSaving" class="bg-calm-500 hover:bg-calm-400 text-ink-950 font-bold text-xs rounded-xl px-4 py-2.5 transition">Simpan Soal Ke Database</button>
-        </div>
-
-        <div class="space-y-3">
-          <template x-for="(q, idx) in guruQuestions" :key="idx">
-            <div class="flex items-center space-x-2">
-              <input type="text" x-model="guruQuestions[idx]" placeholder="Ketik pertanyaan..." class="flex-grow bg-ink-900 border border-ink-700 rounded-xl px-4 py-2 text-sm text-white">
-              <button @click="removeGuruQuestionField(idx)" class="bg-alert-500/20 text-alert-400 px-3 py-2 rounded-xl text-xs">Hapus</button>
-            </div>
-          </template>
-          <button @click="addGuruQuestionField()" class="text-xs text-signal-400 hover:underline">+ Tambah Pertanyaan</button>
-        </div>
-      </div>
-
-      <!-- Box 2: Tabel Rekap Wawancara Siswa -->
-      <div class="bg-ink-850 p-6 rounded-2xl border border-ink-700 space-y-4 shadow-xl">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 class="text-xl font-bold font-display text-white">Rekap Wawancara Siswa</h2>
-            <p class="text-xs text-slate-400">Daftar lengkap laporan wawancara siswa yang tersimpan di sistem.</p>
-          </div>
-          <div class="flex items-center space-x-3">
-            <input type="text" x-model="searchFilter" placeholder="Cari nama / room..." class="bg-ink-900 border border-ink-700 rounded-xl px-4 py-2 text-xs text-white">
-            <button @click="exportToExcel()" class="bg-calm-500 text-ink-950 font-bold text-xs px-4 py-2 rounded-xl transition">Export Excel</button>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-ink-900 text-xs font-mono uppercase text-slate-400 border-b border-ink-700">
-              <tr>
-                <th class="p-3">Waktu</th>
-                <th class="p-3">Nama Siswa</th>
-                <th class="p-3">Room ID</th>
-                <th class="p-3">Rata-Rata Stres</th>
-                <th class="p-3">Aksi</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ink-700">
-              <template x-for="item in filteredStudentResults" :key="item.id">
-                <tr class="hover:bg-ink-900/50">
-                  <td class="p-3 text-xs font-mono" x-text="new Date(item.created_at).toLocaleString('id-ID')"></td>
-                  <td class="p-3 font-semibold text-white" x-text="item.student_name"></td>
-                  <td class="p-3 font-mono text-xs" x-text="item.room_id"></td>
-                  <td class="p-3 font-mono text-xs text-signal-400" x-text="item.avg_stress + '%'"></td>
-                  <td class="p-3 flex items-center space-x-2">
-                    <button @click="viewStudentDetail(item)" class="bg-signal-500/20 text-signal-400 text-xs px-3 py-1 rounded-lg">Detail</button>
-                    <button @click="deleteStudentResult(item.id)" class="bg-alert-500/20 text-alert-400 text-xs px-3 py-1 rounded-lg">Hapus</button>
-                  </td>
-                </tr>
-              </template>
-              <template x-if="filteredStudentResults.length === 0">
-                <tr>
-                  <td colspan="5" class="text-center py-8 text-xs text-slate-500 italic">Belum ada data wawancara yang tersedia.</td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-
-  </main>
-
-  <!-- PIN Modal Admin -->
-  <div x-show="showPinModal" class="fixed inset-0 bg-ink-950/80 backdrop-blur flex items-center justify-center p-4 z-50">
-    <div class="bg-ink-850 border border-ink-700 p-6 rounded-2xl max-w-xs w-full space-y-4 shadow-2xl">
-      <h3 class="text-lg font-bold font-display text-white">Masukkan PIN Admin Guru</h3>
-      <input type="password" x-model="inputPin" @keydown.enter="verifyPin()" placeholder="Masukkan 4 digit PIN..." class="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-center text-lg text-white font-mono tracking-widest">
-      <p x-show="pinError" class="text-xs text-alert-400 text-center">PIN Salah, coba lagi!</p>
-      <div class="flex items-center space-x-2">
-        <button @click="showPinModal = false" class="w-1/2 bg-ink-800 text-slate-400 py-2 rounded-xl text-xs font-semibold">Batal</button>
-        <button @click="verifyPin()" class="w-1/2 bg-signal-500 text-ink-950 font-bold py-2 rounded-xl text-xs">Verifikasi</button>
-      </div>
-    </div>
-  </div>
-
 </body>
 </html>

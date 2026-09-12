@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1789229492900,
+    "nama": "Budi",
+    "tanggal": "2026-09-12T16:11:32.900Z",
+    "transkrip": [
+      {
+        "role": "user",
+        "content": "Halo kak"
+      },
+      {
+        "role": "assistant",
+        "content": "Halo! Mau masuk jurusan apa nih di SMK Telkom?"
+      },
+      {
+        "role": "user",
+        "content": "g ada, bingung"
+      },
+      {
+        "role": "assistant",
+        "content": "Wajar kok kalau masih bingung! Suka ngotak-ngatik komputer atau lebih suka gambar?"
+      },
+      {
+        "role": "user",
+        "content": "suka bikin game di scratch"
+      }
+    ],
+    "hasil_rekap": "**Rekapitulasi Wawancara**\n\n| Aspek | Hasil |\n|-------|-------|\n| **1. Rekomendasi Jurusan** | **RPL (Rekayasa Perangkat Lunak)** – minat pada pembuatan game (meski dengan Scratch) menunjukkan ketertarikan pada pemrograman dan pengembangan aplikasi. |\n| **2. Kesiapan & Motivasi** | **Sedang** – calon siswa masih bingung soal pilihan jurusan, namun sudah memiliki motivasi dasar (suka bikin game) yang dapat dikembangkan dengan bimbingan. |\n| **3. Analisis Gaya Bicara & Intonasi** | **Pemalu / Singkat** – jawaban singkat, tidak banyak detail, cenderung tertutup. |\n| **4. Catatan Evaluator** | Calon siswa menunjukkan minat alami pada dunia pemrograman melalui kegiatan membuat game di Scratch. Ia belum memiliki gambaran jelas tentang jurusan yang tersedia, sehingga membutuhkan arahan lebih lanjut dari guru atau konselor. Gaya bicara yang singkat menandakan sifat introvert atau pemalu, namun antusiasme terhadap pembuatan game dapat menjadi pendorong utama bila diberikan dukungan yang tepat. Disarankan memberi contoh proyek sederhana di RPL, menjelaskan perbedaan antara RPL, TKJ, TJA, DKV, dan Digimark, serta mengajak siswa berpartisipasi dalam workshop coding agar motivasinya meningkat menjadi **tinggi**."
+  },
+  {
+    "id": 1789229902108,
+    "timestamp": "2026-09-12T16:18:22.108Z",
+    "input": "",
+    "ekspresi": "Netral",
+    "balasan_ai": "Halo, dek! Selamat datang di tim penerimaan SMK Telkom. Lagi sibuk apa nih, atau ada jurusan yang lagi dipertimbangin?"
+  }
+]

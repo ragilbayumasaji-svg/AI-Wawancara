@@ -1,147 +1,102 @@
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
+const { exec } = require('child_process');
+const fs = require('fs');
+const util = require('util');
+const execPromise = util.promisify(exec);
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
 
-// Middleware (cukup dipanggil sekali)
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static(__dirname));
+const SYSTEM_PROMPT = `Kamu "Kak Rama", kakak pembimbing sekolah yang gaul, empatik, dan santai.
+ATURAN WAJIB:
+1. Selalu CERNA jawaban siswa dulu (refleksi aktif) sebelum lanjut — tunjukkan kamu benar-benar dengar.
+2. Gaya bahasa: "lu/gua/bro/dek", boleh "wkwk", santai, TIDAK BOLEH bahasa baku ala guru BK/pewawancara formal.
+3. Struktur: (a) tanggapan empati/humor singkat atas isi jawaban, (b) sambung ke pertanyaan lanjutan yang nyambung.
+4. Maksimal 2-3 kalimat pendek. Jangan menggurui, jangan menghakimi.`;
 
-// Inisialisasi Database SQLite
-const db = new sqlite3.Database('./data_wawancara.db', (err) => {
-  if (err) console.error('Error DB:', err.message);
-  else console.log('Database SQLite Siap!');
-});
+const db = new sqlite3.Database('./wawancara.db');
 
-// Buat Tabel jika belum ada
 db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS kotak_pos (
-    room_id TEXT PRIMARY KEY,
-    daftar_soal TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS interviews (
+  db.run(`CREATE TABLE IF NOT EXISTS chat_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_name TEXT NOT NULL,
     room_id TEXT NOT NULL,
-    avg_stress INTEGER NOT NULL,
-    telemetry_logs TEXT,
-    psychological_report TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    user_input TEXT NOT NULL,
+    ai_response TEXT,
+    ekspresi TEXT,
+    stres_level INTEGER,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 });
 
-// --- API KOTAK POS (SOAL GURU) ---
-app.get('/api/kotak-pos/:roomId', (req, res) => {
-  const { roomId } = req.params;
-  db.get(`SELECT daftar_soal FROM kotak_pos WHERE room_id = ?`, [roomId], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.json({ daftar_soal: null });
-    res.json({ daftar_soal: JSON.parse(row.daftar_soal) });
-  });
-});
-
-app.post('/api/kotak-pos', (req, res) => {
-  const { room_id, daftar_soal } = req.body;
-  const soalJson = JSON.stringify(daftar_soal);
-  db.run(
-    `INSERT INTO kotak_pos (room_id, daftar_soal) VALUES (?, ?) 
-     ON CONFLICT(room_id) DO UPDATE SET daftar_soal=excluded.daftar_soal`,
-    [room_id, soalJson],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Soal berhasil disimpan' });
-    }
-  );
-});
-
-// --- API REKAP WAWANCARA ---
-app.get('/api/interviews', (req, res) => {
-  db.all(`SELECT * FROM interviews ORDER BY created_at DESC`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    const formatted = rows.map(r => ({
-      ...r,
-      telemetry_logs: JSON.parse(r.telemetry_logs || '[]')
-    }));
-    res.json(formatted);
-  });
-});
-
-app.post('/api/interviews', (req, res) => {
-  const { student_name, room_id, avg_stress, telemetry_logs, psychological_report } = req.body;
-  db.run(
-    `INSERT INTO interviews (student_name, room_id, avg_stress, telemetry_logs, psychological_report) 
-     VALUES (?, ?, ?, ?, ?)`,
-    [student_name, room_id, avg_stress, JSON.stringify(telemetry_logs), psychological_report],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Laporan berhasil disimpan', id: this.lastID });
-    }
-  );
-});
-
-app.delete('/api/interviews/:id', (req, res) => {
-  db.run(`DELETE FROM interviews WHERE id = ?`, [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Data terhapus' });
-  });
-});
-
-// --- API PROXY FOR LLM (GROQ / GEMINI) ---
+// Endpoint AI Chat dengan Active Listening & History Context
 app.post('/api/ai-chat', async (req, res) => {
-  const { promptText } = req.body;
+  const { promptText, history = [], room_id = 'SISWA01', ekspresi = null, stres_level = null } = req.body;
+  const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...history, { role: 'user', content: promptText }];
   
-  // 1. Coba panggil Groq lebih dulu
+  const simpanHistory = (aiText) => {
+    db.run(
+      `INSERT INTO chat_history (room_id, user_input, ai_response, ekspresi, stres_level) VALUES (?, ?, ?, ?, ?)`,
+      [room_id, promptText, aiText, ekspresi, stres_level]
+    );
+  };
+
   if (process.env.GROQ_API_KEY) {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: 'Kamu pewawancara AI konseling yang empati dan ramah.' },
-            { role: 'user', content: promptText }
-          ],
-          max_tokens: 120
-        })
+        headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 150, temperature: 0.8 })
       });
       if (response.ok) {
         const data = await response.json();
-        return res.json({ result: data.choices[0]?.message?.content, provider: 'Groq (Llama 3.3)' });
+        const text = data.choices[0]?.message?.content;
+        if (text) { simpanHistory(text); return res.json({ result: text, provider: 'Groq (Llama 3.3)' }); }
       }
-    } catch (e) {
-      console.warn("Groq error, fallback to Gemini...");
-    }
+    } catch (e) { console.warn("Groq error, fallback..."); }
   }
 
-  // 2. Fallback ke Gemini jika Groq gagal
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return res.json({ result: data.candidates?.[0]?.content?.parts?.[0]?.text, provider: 'Gemini 1.5 Flash' });
-      }
-    } catch (e) {}
-  }
-
-  // 3. Fallback jika kedua API gagal
-  res.json({ result: null, provider: 'Lokal (Smart Dynamic)' });
+  const fallback = "Wah santai aja bro, gua masih di sini kok. Coba ceritain lagi ya wkwk.";
+  simpanHistory(fallback);
+  res.json({ result: fallback, provider: 'Lokal' });
 });
 
-// Jalankan server di baris paling bawah
-app.listen(PORT, () => console.log(`Server berjalan di port ${PORT}`));
+// Endpoint Rekap History
+app.get('/api/history', (req, res) => {
+  const { room_id } = req.query;
+  const sql = room_id
+    ? `SELECT * FROM chat_history WHERE room_id = ? ORDER BY timestamp DESC`
+    : `SELECT * FROM chat_history ORDER BY timestamp DESC LIMIT 200`;
+  db.all(sql, room_id ? [room_id] : [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Endpoint Edge-TTS Audio Natural (id-ID-ArdiNeural)
+app.post('/api/tts', async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: "Teks kosong" });
+  
+  const cleanText = text.replace(/[*_~#"`\\]/g, '').trim();
+  const tempFile = path.join('/tmp', `tts_${Date.now()}.mp3`);
+  
+  try {
+    await execPromise(`python3 -m edge_tts --voice "id-ID-ArdiNeural" --text "${cleanText}" --write-media "${tempFile}"`);
+    if (fs.existsSync(tempFile)) {
+      res.sendFile(tempFile, () => {
+        try { fs.unlinkSync(tempFile); } catch(e){}
+      });
+      return;
+    }
+  } catch (e) {
+    console.error("Edge-TTS Error:", e.message);
+  }
+  res.status(500).json({ error: "Gagal generate suara TTS" });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server Kak Rama berjalan di port ${PORT}`));
