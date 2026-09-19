@@ -1,164 +1,286 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
+import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 
-const MEDIAPIPE_SCRIPTS = [
-  'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js',
-];
-
-let scriptsLoadingPromise = null;
-
-function loadMediaPipeScripts() {
-  if (window.FaceMesh && window.Camera) return Promise.resolve();
-  if (scriptsLoadingPromise) return scriptsLoadingPromise;
-
-  scriptsLoadingPromise = Promise.all(
-    MEDIAPIPE_SCRIPTS.map(
-      (src) =>
-        new Promise((resolve, reject) => {
-          if (document.querySelector(`script[src="${src}"]`)) return resolve();
-          const script = document.createElement('script');
-          script.src = src;
-          script.crossOrigin = 'anonymous';
-          script.onload = resolve;
-          script.onerror = () => reject(new Error(`Gagal memuat ${src}`));
-          document.head.appendChild(script);
-        })
-    )
-  );
-  return scriptsLoadingPromise;
-}
-
-function distance(p1, p2) {
-  return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+/**
+ * 1. FEATURE EXTRACTION
+ * Mengambil fitur gabungan dari blendshapes spesifik MediaPipe.
+ */
+function extractRawFeatures(bs) {
+  return {
+    smile: ((bs['mouthSmileLeft'] || 0) + (bs['mouthSmileRight'] || 0)) / 2,
+    frown: ((bs['mouthFrownLeft'] || 0) + (bs['mouthFrownRight'] || 0)) / 2,
+    browTension: ((bs['browDownLeft'] || 0) + (bs['browDownRight'] || 0)) / 2,
+    browRaise: ((bs['browInnerUp'] || 0) + (bs['browOuterUpLeft'] || 0) + (bs['browOuterUpRight'] || 0)) / 3,
+    eyeWide: ((bs['eyeWideLeft'] || 0) + (bs['eyeWideRight'] || 0)) / 2,
+    eyeSquint: ((bs['eyeSquintLeft'] || 0) + (bs['eyeSquintRight'] || 0)) / 2,
+    jawOpen: bs['jawOpen'] || 0,
+    disgust: ((bs['noseSneerLeft'] || 0) + (bs['noseSneerRight'] || 0)) / 2,
+  };
 }
 
 /**
- * Kamera + deteksi wajah real-time (MediaPipe FaceMesh), menggantikan
- * setupFaceMesh()/analyzeLandmarks() di index.html lama.
- *
- * Props:
- * - active: boolean, mulai kamera saat true
- * - onTelemetryUpdate: ({ stress, gaze, expression }) => void
- * - onFaceDetectedChange: (boolean) => void
- * - onReady / onError: callback saat kamera siap / gagal
+ * 2. GAZE ESTIMATION
+ * Estimasi arah pandangan mata menggunakan blendshapes pandangan mata MediaPipe.
  */
-const WebcamTelemetry = forwardRef(function WebcamTelemetry(
-  { active, onTelemetryUpdate, onFaceDetectedChange, onReady, onError },
-  ref
-) {
+function estimateGaze(bs) {
+  const lookLeft = ((bs['eyeLookOutLeft'] || 0) + (bs['eyeLookInRight'] || 0)) / 2;
+  const lookRight = ((bs['eyeLookInLeft'] || 0) + (bs['eyeLookOutRight'] || 0)) / 2;
+  const lookUp = ((bs['eyeLookUpLeft'] || 0) + (bs['eyeLookUpRight'] || 0)) / 2;
+  const lookDown = ((bs['eyeLookDownLeft'] || 0) + (bs['eyeLookDownRight'] || 0)) / 2;
+
+  if (lookLeft > 0.35) return 'Kiri';
+  if (lookRight > 0.35) return 'Kanan';
+  if (lookUp > 0.35) return 'Atas';
+  if (lookDown > 0.35) return 'Bawah';
+  return 'Depan';
+}
+
+/**
+ * 3. TEMPORAL SMOOTHING (Exponential Moving Average)
+ */
+function applyEMA(current, previous, alpha = 0.25) {
+  if (!previous) return { ...current };
+  const smoothed = {};
+  for (const key in current) {
+    smoothed[key] = alpha * current[key] + (1 - alpha) * (previous[key] || 0);
+  }
+  return smoothed;
+}
+
+/**
+ * 4. EXPRESSION SCORING & HYSTERESIS
+ */
+function classifyExpression(features, activeStateRef) {
+  // Hitung kandidat skor ekspresi berdasarkan kombinasi fitur
+  const candidates = {
+    'Senyum / Senang 😀': features.smile * 0.7 + features.eyeSquint * 0.3 - features.frown * 0.4,
+    'Antusias / Terkejut 😮': features.jawOpen * 0.4 + features.browRaise * 0.4 + features.eyeWide * 0.2,
+    'Tegang / Marah 😠': features.browTension * 0.6 + features.frown * 0.2 + features.eyeSquint * 0.2,
+    'Cemas / Sedih 😢': features.frown * 0.5 + features.browTension * 0.3 - features.smile * 0.3,
+    'Kurang Nyaman 🤢': features.disgust * 0.7 + features.browTension * 0.3,
+  };
+
+  let topExpression = 'Netral / Tidak jelas 😐';
+  let topScore = 0.35; // Baseline score untuk netral
+
+  for (const [expr, score] of Object.entries(candidates)) {
+    if (score > topScore) {
+      topScore = score;
+      topExpression = expr;
+    }
+  }
+
+  // Terapkan Hysteresis
+  const ENTRY_THRESHOLD = 0.50;
+  const EXIT_THRESHOLD = 0.38;
+
+  const currentExpr = activeStateRef.current.expression;
+  const currentScore = candidates[currentExpr] || 0;
+
+  let finalExpression = 'Netral / Tidak jelas 😐';
+  let confidence = Math.min(1.0, Math.max(0.3, topScore));
+
+  if (currentExpr !== 'Netral / Tidak jelas 😐' && currentScore >= EXIT_THRESHOLD) {
+    // Pertahankan ekspresi sebelumnya jika belum turun di bawah exit threshold
+    finalExpression = currentExpr;
+    confidence = Math.min(1.0, Math.max(0.3, currentScore));
+  } else if (topScore >= ENTRY_THRESHOLD) {
+    // Masuk ke ekspresi baru jika melewati entry threshold
+    finalExpression = topExpression;
+  } else {
+    // Default fallback
+    finalExpression = 'Netral / Tidak jelas 😐';
+    confidence = Math.max(0.4, 1.0 - (features.browTension + features.smile + features.jawOpen));
+  }
+
+  activeStateRef.current.expression = finalExpression;
+
+  // Indikator Ketegangan Otot Wajah (Facial Tension), BUKAN stress psikologis
+  const facialTension = Math.min(
+    1.0,
+    Math.max(0.0, features.browTension * 0.45 + features.frown * 0.35 + features.disgust * 0.2)
+  );
+
+  return {
+    expression: finalExpression,
+    confidence: Number(confidence.toFixed(2)),
+    facialTension: Number(facialTension.toFixed(2)),
+  };
+}
+
+const WebcamTelemetry = forwardRef(({ active, onTelemetryUpdate, onReady, onError }, ref) => {
   const videoRef = useRef(null);
-  const faceMeshRef = useRef(null);
-  const cameraRef = useRef(null);
-  const [faceDetected, setFaceDetected] = useState(false);
+  const streamRef = useRef(null);
+  const landmarkerRef = useRef(null);
+  const animFrameRef = useRef(null);
+
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // References untuk menghindari Re-render berlebihan & menjaga state internal
+  const lastInferenceTimeRef = useRef(0);
+  const smoothedFeaturesRef = useRef(null);
+  const activeStateRef = useRef({ expression: 'Netral / Tidak jelas 😐' });
+  const baselineRef = useRef({ frames: [], data: null });
 
   useImperativeHandle(ref, () => ({
-    stop() {
-      cameraRef.current?.stop?.();
+    stop: () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
     },
   }));
 
   useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
+    let isMounted = true;
 
-    async function setup() {
+    async function initFaceLandmarker() {
       try {
-        await loadMediaPipeScripts();
-        if (cancelled) return;
+        const filesetResolver = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        );
 
-        const videoElement = videoRef.current;
-        if (!videoElement) throw new Error('Elemen video tidak ditemukan');
-
-        const faceMesh = new window.FaceMesh({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-        });
-        faceMesh.setOptions({
-          maxNumFaces: 1,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-
-        faceMesh.onResults((results) => {
-          if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-            setFaceDetected(true);
-            onFaceDetectedChange?.(true);
-            analyzeLandmarks(results.multiFaceLandmarks[0]);
-          } else {
-            setFaceDetected(false);
-            onFaceDetectedChange?.(false);
-            onTelemetryUpdate?.({ stress: 0, gaze: 'Depan', expression: 'Neutral / Santai' });
-          }
-        });
-
-        faceMeshRef.current = faceMesh;
-
-        const camera = new window.Camera(videoElement, {
-          onFrame: async () => {
-            if (videoElement && videoElement.readyState >= 2) {
-              await faceMesh.send({ image: videoElement });
-            }
+        const landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath:
+              'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU',
           },
-          width: 640,
-          height: 480,
+          outputFaceBlendshapes: true,
+          runningMode: 'VIDEO',
+          numFaces: 1,
         });
 
-        cameraRef.current = camera;
-        await camera.start();
-        if (!cancelled) onReady?.();
+        if (isMounted) {
+          landmarkerRef.current = landmarker;
+          setIsLoaded(true);
+          startCamera();
+        }
       } catch (err) {
-        if (!cancelled) onError?.(err);
+        console.error('Gagal memuat MediaPipe Face Landmarker:', err);
+        if (onError) onError(err);
       }
     }
 
-    function analyzeLandmarks(lm) {
-      const leftEyeOuter = lm[33];
-      const rightEyeOuter = lm[263];
-      const eyeDist = distance(leftEyeOuter, rightEyeOuter);
-      if (!eyeDist) return;
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, frameRate: { ideal: 30 } },
+          audio: false,
+        });
 
-      const mouthWidthRatio = distance(lm[61], lm[291]) / eyeDist;
-
-      let stress = 15;
-      let expression = 'Neutral / Santai';
-      if (mouthWidthRatio > 0.7) {
-        expression = 'Tegang / Meringis';
-        stress = 65;
-      } else if (mouthWidthRatio > 0.6) {
-        expression = 'Ceria / Senang';
-        stress = 10;
+        if (videoRef.current && isMounted) {
+          videoRef.current.srcObject = stream;
+          streamRef.current = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play();
+            if (onReady) onReady();
+            detectLoop();
+          };
+        }
+      } catch (err) {
+        console.error('Kamera tidak diizinkan atau tidak ditemukan:', err);
+        if (onError) onError(err);
       }
-
-      onTelemetryUpdate?.({ stress, gaze: 'Depan', expression });
     }
 
-    setup();
+    if (active) {
+      initFaceLandmarker();
+    }
 
     return () => {
-      cancelled = true;
-      cameraRef.current?.stop?.();
-      cameraRef.current = null;
-      faceMeshRef.current?.close?.();
-      faceMeshRef.current = null;
+      isMounted = false;
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
+  function detectLoop(time) {
+    if (videoRef.current && landmarkerRef.current && videoRef.current.readyState >= 2) {
+      // Throttle Inference (~30 FPS / 33ms Interval)
+      if (time - lastInferenceTimeRef.current >= 33) {
+        lastInferenceTimeRef.current = time;
+
+        const results = landmarkerRef.current.detectForVideo(videoRef.current, performance.now());
+
+        if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
+          const bsArray = results.faceBlendshapes[0].categories;
+          const bsMap = {};
+          bsArray.forEach((item) => {
+            bsMap[item.categoryName] = item.score;
+          });
+
+          // 1. Feature Extraction
+          const rawFeatures = extractRawFeatures(bsMap);
+
+          // 2. Baseline Calibration (12 Frame Pertama)
+          if (baselineRef.current.frames.length < 12) {
+            baselineRef.current.frames.push(rawFeatures);
+            if (baselineRef.current.frames.length === 12) {
+              const avgBaseline = {};
+              for (const key in rawFeatures) {
+                const sum = baselineRef.current.frames.reduce((acc, f) => acc + f[key], 0);
+                avgBaseline[key] = sum / 12;
+              }
+              baselineRef.current.data = avgBaseline;
+            }
+          }
+
+          // Zero-center adjustment terhadap baseline
+          const normalizedFeatures = { ...rawFeatures };
+          if (baselineRef.current.data) {
+            for (const key in normalizedFeatures) {
+              normalizedFeatures[key] = Math.max(0, normalizedFeatures[key] - baselineRef.current.data[key]);
+            }
+          }
+
+          // 3. Temporal Smoothing (EMA)
+          const smoothed = applyEMA(normalizedFeatures, smoothedFeaturesRef.current, 0.25);
+          smoothedFeaturesRef.current = smoothed;
+
+          // 4. Expression & Tension Analysis
+          const classification = classifyExpression(smoothed, activeStateRef);
+          const gazeDirection = estimateGaze(bsMap);
+
+          // 5. Pembulatan Fitur untuk Output Telemetri
+          const formattedFeatures = {};
+          for (const key in smoothed) {
+            formattedFeatures[key] = Number(smoothed[key].toFixed(2));
+          }
+
+          // 6. Callback Telemetri tanpa memicu Re-render React yang tidak perlu
+          if (onTelemetryUpdate) {
+            onTelemetryUpdate({
+              expression: classification.expression,
+              confidence: classification.confidence,
+              facialTension: classification.facialTension,
+              features: formattedFeatures,
+              gaze: gazeDirection,
+              timestamp: Date.now(),
+            });
+          }
+        }
+      }
+    }
+    animFrameRef.current = requestAnimationFrame(detectLoop);
+  }
+
   return (
-    <div className="relative bg-[#212121] rounded-2xl overflow-hidden border border-gray-200 shadow-md flex-1 min-h-0 flex items-center justify-center">
+    <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-inner border border-gray-300 flex items-center justify-center">
       <video
         ref={videoRef}
-        autoPlay
-        muted
+        className="w-full h-full object-cover transform -scale-x-100"
         playsInline
-        className="w-full h-full object-cover transform scale-x-[-1]"
+        muted
       />
-      <div className="absolute top-4 left-4 bg-black/60 px-3 py-1.5 rounded-full flex items-center space-x-2 border border-white/10">
-        <div className={`w-2 h-2 rounded-full ${faceDetected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-        <span className="text-[11px] font-medium text-white">
-          {faceDetected ? 'Wajah Terdeteksi' : 'Mencari Wajah...'}
-        </span>
-      </div>
+      {!isLoaded && (
+        <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center text-white space-y-2">
+          <div className="w-8 h-8 border-4 border-maroon-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs font-semibold">Memuat Tracker Wajah & Telemetri Ekspresi...</span>
+        </div>
+      )}
     </div>
   );
 });

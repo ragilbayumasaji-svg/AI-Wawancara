@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import CandidateForm from './components/CandidateForm';
-import WebcamTelemetry from './components/WebcamTelemetry';
+import TelemetryPanel from './components/TelemetryPanel';
 import ChatContainer from './components/ChatContainer';
 import VoiceController from './components/VoiceController';
 import AiAvatar from './components/AiAvatar';
@@ -27,18 +27,32 @@ export default function App() {
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
-  const [currentStep, setCurrentStep] = useState(0);
+  const stepRef = useRef(0);
+  const isProcessingRef = useRef(false);
+
   const [chatHistory, setChatHistory] = useState([]);
   const [aiState, setAiState] = useState('idle');
+  const [aiEmotion, setAiEmotion] = useState('neutral');
   const [textToSpeak, setTextToSpeak] = useState(null);
 
-  const [liveTelemetry, setLiveTelemetry] = useState({ stress: 0, gaze: 'Depan', expression: 'Neutral / Santai' });
+  // Telemetri Visual Wajah & Audio
+  const [liveTelemetry, setLiveTelemetry] = useState({ stress: 0, gaze: 'Depan', expression: 'Netral / Santai' });
+  const [audioTelemetry, setAudioTelemetry] = useState({ energy: 0, volumeLabel: 'Normal / Stabil' });
+
   const telemetrySamplesRef = useRef([]);
   const webcamRef = useRef(null);
 
   function handleTelemetryUpdate(data) {
     setLiveTelemetry(data);
-    if (stage === 'interview') telemetrySamplesRef.current.push(data);
+    if (stage === 'interview') {
+      telemetrySamplesRef.current.push({
+        stress: data.stress || 0,
+        expression: data.expression || 'Netral / Santai',
+        energy: audioTelemetry.energy || 0,
+        volumeLabel: audioTelemetry.volumeLabel || 'Normal / Stabil',
+        timestamp: Date.now()
+      });
+    }
   }
 
   async function handleStartInterview(name) {
@@ -55,7 +69,7 @@ export default function App() {
 
   function handleCameraReady() {
     setCameraLoading(false);
-    setCurrentStep(0);
+    stepRef.current = 0;
     const opening = `Halo ${studentName}! ${INITIAL_QUESTIONS[0]}`;
     setChatHistory([{ role: 'assistant', content: opening }]);
     setTextToSpeak(opening);
@@ -67,65 +81,151 @@ export default function App() {
     setStage('candidate');
   }
 
+  function parseAiResponse(rawText) {
+    let emotion = 'neutral';
+    let cleanText = rawText;
+
+    if (rawText.includes('[EMOSI: Empati]') || rawText.includes('[EMOSI: Tenang]')) {
+      emotion = 'empathetic';
+      cleanText = rawText.replace(/\[EMOSI:.*?\]/g, '').trim();
+    } else if (rawText.includes('[EMOSI: Ceria]') || rawText.includes('[EMOSI: Antusias]')) {
+      emotion = 'happy';
+      cleanText = rawText.replace(/\[EMOSI:.*?\]/g, '').trim();
+    } else if (rawText.includes('[EMOSI: Penasaran]') || rawText.includes('[EMOSI: Bingung]')) {
+      emotion = 'curious';
+      cleanText = rawText.replace(/\[EMOSI:.*?\]/g, '').trim();
+    }
+
+    return { emotion, cleanText };
+  }
+
   async function handleAnswerSubmit(answerText) {
-    setChatHistory((prev) => [...prev, { role: 'user', content: answerText }]);
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
+    const updatedHistory = [...chatHistory, { role: 'user', content: answerText }];
+    setChatHistory(updatedHistory);
     setAiState('thinking');
 
-    const nextStep = currentStep + 1;
+    const nextStep = stepRef.current + 1;
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('API Timeout')), 3000)
+    );
 
     try {
-      const history = chatHistory.map(({ role, content }) => ({ role, content }));
-      const response = await sendChatMessage({
+      const history = updatedHistory.map(({ role, content }) => ({ role, content }));
+      
+      const fetchPromise = sendChatMessage({
         promptText: answerText,
         history,
         roomId,
         studentName,
         ekspresi: liveTelemetry.expression,
         stresLevel: Math.round(liveTelemetry.stress),
+        nadaSuara: audioTelemetry.volumeLabel,
+        energiSuara: audioTelemetry.energy,
       });
 
-      const aiFeedback = response?.result || 'Terima kasih atas jawabanmu!';
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      const rawFeedback = response?.result || 'Terima kasih atas jawabanmu!';
+      
+      const { emotion, cleanText } = parseAiResponse(rawFeedback);
+      setAiEmotion(emotion);
 
       if (nextStep < INITIAL_QUESTIONS.length) {
-        setCurrentStep(nextStep);
+        stepRef.current = nextStep;
         const nextQ = INITIAL_QUESTIONS[nextStep];
-        const fullReply = `${aiFeedback}\n\n${nextQ}`;
+        const fullReply = `${cleanText}\n\n${nextQ}`;
 
         setChatHistory((prev) => [...prev, { role: 'assistant', content: fullReply }]);
         setTextToSpeak(fullReply);
       } else {
-        const finalReply = `${aiFeedback}\n\nTerima kasih, seluruh pertanyaan wawancara telah selesai!`;
-        setChatHistory((prev) => [...prev, { role: 'assistant', content: finalReply }]);
+        const finalReply = `${cleanText}\n\nTerima kasih, seluruh pertanyaan wawancara telah selesai!`;
+        const finalHistory = [...updatedHistory, { role: 'assistant', content: finalReply }];
+        setChatHistory(finalHistory);
         setTextToSpeak(finalReply);
-        setTimeout(() => finishSession(), 4000);
+        setTimeout(() => finishSession(finalHistory), 3000);
       }
     } catch (err) {
       if (nextStep < INITIAL_QUESTIONS.length) {
-        setCurrentStep(nextStep);
+        stepRef.current = nextStep;
         const fallback = `Terima kasih! Jawabanmu sudah tersimpan.\n\n${INITIAL_QUESTIONS[nextStep]}`;
         setChatHistory((prev) => [...prev, { role: 'assistant', content: fallback }]);
         setTextToSpeak(fallback);
       } else {
-        finishSession();
+        const finalFallback = "Terima kasih! Seluruh pertanyaan wawancara telah selesai.";
+        const finalHistory = [...updatedHistory, { role: 'assistant', content: finalFallback }];
+        setChatHistory(finalHistory);
+        setTextToSpeak(finalFallback);
+        setTimeout(() => finishSession(finalHistory), 3000);
       }
+    } finally {
+      isProcessingRef.current = false;
+      setAiState('idle');
     }
   }
 
   function handleSpeakEnd() {
     setAiState('idle');
+    setAiEmotion('neutral');
   }
 
-  async function finishSession() {
+  async function finishSession(latestHistory = chatHistory) {
     webcamRef.current?.stop();
     setStage('finished');
     const samples = telemetrySamplesRef.current;
-    const avgStress = samples.length ? samples.reduce((sum, s) => sum + (s.stress || 0), 0) / samples.length : null;
+    
+    let avgStress = 15;
+    let avgEnergy = 0;
+    let dominantExpression = 'Netral / Santai';
+    let dominantTone = 'Normal / Stabil';
+
+    if (samples.length > 0) {
+      const totalStress = samples.reduce((acc, s) => acc + (s.stress || 0), 0);
+      avgStress = Math.round(totalStress / samples.length);
+
+      const totalEnergy = samples.reduce((acc, s) => acc + (s.energy || 0), 0);
+      avgEnergy = Math.round(totalEnergy / samples.length);
+
+      // Hitung Modus Ekspresi Wajah
+      const exprCounts = {};
+      samples.forEach(s => {
+        if (s.expression) exprCounts[s.expression] = (exprCounts[s.expression] || 0) + 1;
+      });
+      dominantExpression = Object.keys(exprCounts).reduce((a, b) => exprCounts[a] > exprCounts[b] ? a : b, 'Netral / Santai');
+
+      // Hitung Modus Nada Suara Meyda
+      const toneCounts = {};
+      samples.forEach(s => {
+        if (s.volumeLabel) toneCounts[s.volumeLabel] = (toneCounts[s.volumeLabel] || 0) + 1;
+      });
+      dominantTone = Object.keys(toneCounts).reduce((a, b) => toneCounts[a] > toneCounts[b] ? a : b, 'Normal / Stabil');
+    }
+
+    const newRecord = {
+      id: Date.now(),
+      roomId,
+      studentName: studentName || 'Siswa Tanpa Nama',
+      avgStress,
+      avgEnergy,
+      dominantExpression,
+      dominantTone,
+      date: new Date().toLocaleString('id-ID'),
+      chatHistory: latestHistory,
+      samplesCount: samples.length
+    };
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('interview_results') || '[]');
+      localStorage.setItem('interview_results', JSON.stringify([newRecord, ...existing]));
+    } catch (e) {
+      console.error('Gagal simpan lokal:', e);
+    }
 
     try {
       await finishInterview({ roomId, studentName, avgStress, psychologicalReport: null, telemetryLogs: samples });
-    } catch (err) {
-      console.warn('Gagal menyimpan rekap:', err.message);
-    }
+    } catch (err) {}
   }
 
   return (
@@ -170,41 +270,29 @@ export default function App() {
         {stage === 'interview' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[85vh] w-full">
             <div className="lg:col-span-5 flex flex-col space-y-3 h-full">
-              <WebcamTelemetry
+              <TelemetryPanel
                 ref={webcamRef}
                 active={stage === 'interview'}
-                onTelemetryUpdate={handleTelemetryUpdate}
+                voiceTelemetry={audioTelemetry}
+                onTelemetryChange={handleTelemetryUpdate}
                 onReady={handleCameraReady}
                 onError={handleCameraError}
               />
-
-              <div className="grid grid-cols-2 gap-3 flex-shrink-0">
-                <div className="bg-white rounded-xl p-3 flex flex-col items-center justify-center border border-gray-200 shadow-sm">
-                  <span className="text-[10px] uppercase text-gray-500">Tingkat Stres</span>
-                  <span className={`text-xl font-bold font-mono ${liveTelemetry.stress > 50 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    {Math.round(liveTelemetry.stress || 0)}%
-                  </span>
-                </div>
-                <div className="bg-white rounded-xl p-3 flex flex-col items-center justify-center border border-gray-200 shadow-sm">
-                  <span className="text-[10px] uppercase text-gray-500">Ekspresi Wajah</span>
-                  <span className="text-xs font-semibold text-maroon-600 capitalize text-center">
-                    {liveTelemetry.expression || 'Netral'}
-                  </span>
-                </div>
-              </div>
             </div>
 
             <div className="lg:col-span-7 flex flex-col space-y-3 h-full overflow-hidden">
-              <AiAvatar aiState={aiState} />
+              <AiAvatar aiState={aiState} emotion={aiEmotion} />
 
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden">
                 <ChatContainer studentName={studentName} chatHistory={chatHistory} aiState={aiState} bare />
                 <VoiceController
-                  disabled={aiState === 'thinking' || aiState === 'speaking'}
+                  disabled={aiState === 'thinking'}
                   onSubmit={handleAnswerSubmit}
                   textToSpeak={textToSpeak}
                   onSpeakStart={() => setAiState('speaking')}
                   onSpeakEnd={handleSpeakEnd}
+                  onAudioTelemetry={setAudioTelemetry}
+                  emotion={aiEmotion}
                 />
               </div>
             </div>
@@ -218,7 +306,7 @@ export default function App() {
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Wawancara Selesai!</h2>
             <p className="text-gray-500 text-sm mb-6">
-              Terima kasih <span className="font-semibold text-gray-800">{studentName}</span>. Seluruh jawaban dan telemetri ekspresimu telah berhasil dicatat oleh sistem PPDB.
+              Terima kasih <span className="font-semibold text-gray-800">{studentName}</span>. Seluruh jawaban, ekspresi wajah, dan indikator nada suaramu telah berhasil dicatat.
             </p>
             <div className="flex justify-center space-x-3">
               <button

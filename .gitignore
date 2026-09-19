@@ -1,7 +1,21 @@
+# Node Modules
 node_modules/
-dist/
-build/
+**/node_modules/
+
+# Environment / Secret Files (API Key, Database Password, dll)
 .env
-.env.*
+.env.local
+.env.*.local
+*.env
+
+# Output Build
+build/
+dist/
+**/dist/
+
+# Logs & Cache
 *.log
-/tmp/
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
