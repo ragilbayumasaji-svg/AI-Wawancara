@@ -3,202 +3,136 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\ChatHistory;
-use App\Models\Interview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Str;
 
 class InterviewApiController extends Controller
 {
-    /**
-     * Persona & aturan wawancara untuk Tim HRD / Panitia PPDB Sekolah Swasta.
-     * Menggantikan SYSTEM_PROMPT "Kak Rama" di server.js lama.
-     */
-    private const SYSTEM_PROMPT = <<<'PROMPT'
-Kamu adalah anggota Tim HRD / Panitia PPDB (Penerimaan Peserta Didik Baru) di sebuah Sekolah Swasta. Kamu sedang mewawancarai calon siswa baru.
-
-ATURAN WAJIB:
-1. Selalu CERNA jawaban calon siswa dulu (active listening) — beri apresiasi atau tanggapan singkat yang benar-benar nyambung dengan isi jawabannya sebelum melanjutkan.
-2. Gaya bahasa: ramah, profesional, komunikatif, dan empatik, layaknya panitia PPDB yang hangat. Hindari nada interogasi formal yang kaku, tapi tetap sopan dan jangan terlalu informal/gaul.
-3. Struktur balasan: (a) tanggapan/apresiasi singkat atas jawaban calon siswa, (b) sambung dengan satu pertanyaan lanjutan yang kontekstual.
-4. Topik yang bisa digali: alasan memilih sekolah ini, hobi dan minat, ketertarikan jurusan/ekstrakurikuler, cita-cita, serta cara menyikapi tantangan belajar.
-5. Maksimal 2-3 kalimat pendek per balasan. Jangan menggurui, jangan menghakimi, dan jangan membuat kesimpulan lulus/tidak lulus.
-PROMPT;
-
-    /**
-     * POST /api/ai-chat
-     * Menggantikan endpoint /api/ai-chat di server.js.
-     */
     public function chat(Request $request)
     {
         $validated = $request->validate([
-            'promptText'         => 'required|string',
-            'history'            => 'array',
-            'history.*.role'     => 'required_with:history|string|in:system,user,assistant',
-            'history.*.content'  => 'required_with:history|string',
-            'room_id'            => 'nullable|string|max:100',
-            'student_name'       => 'nullable|string|max:150',
-            'ekspresi'           => 'nullable|string|max:100',
-            'stres_level'        => 'nullable|integer|min:0|max:100',
+            'promptText' => 'required|string',
+            'history' => 'nullable|array',
+            'roomId' => 'nullable|string',
+            'studentName' => 'nullable|string',
         ]);
 
-        $roomId      = $validated['room_id'] ?? 'SISWA01';
-        $studentName = $validated['student_name'] ?? null;
-        $history     = $validated['history'] ?? [];
+        $history = $validated['history'] ?? [];
 
         $messages = array_merge(
-            [['role' => 'system', 'content' => self::SYSTEM_PROMPT]],
+            [['role' => 'system', 'content' => $this->getSystemPrompt()]],
             $history,
             [['role' => 'user', 'content' => $validated['promptText']]]
         );
 
-        [$aiText, $provider] = $this->askGroq($messages);
+        try {
+            // Timeout diset ke 15 detik untuk Groq API
+            $response = Http::timeout(15)
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . env('GROQ_API_KEY'),
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://api.groq.com/openai/v1/chat/completions', [
+                    'model' => 'openai/gpt-oss-120b',
+                    'messages' => $messages,
+                    'temperature' => 0.7,
+                ]);
 
-        ChatHistory::create([
-            'room_id'      => $roomId,
-            'student_name' => $studentName,
-            'user_input'   => $validated['promptText'],
-            'ai_response'  => $aiText,
-            'ekspresi'     => $validated['ekspresi'] ?? null,
-            'stres_level'  => $validated['stres_level'] ?? null,
-            'timestamp'    => now(),
-        ]);
+            if ($response->successful()) {
+                $aiText = $response->json('choices.0.message.content');
 
-        return response()->json([
-            'result'   => $aiText,
-            'provider' => $provider,
-        ]);
-    }
-
-    /**
-     * Panggil Groq (Llama 3.3) dengan fallback jawaban lokal jika API
-     * tidak dikonfigurasi atau gagal — persis seperti try/catch di server.js.
-     *
-     * @return array{0: string, 1: string} [teks_ai, nama_provider]
-     */
-    private function askGroq(array $messages): array
-    {
-        $apiKey = config('services.groq.api_key');
-
-        if ($apiKey) {
-            try {
-                $response = Http::withToken($apiKey)
-                    ->timeout(20)
-                    ->post('https://api.groq.com/openai/v1/chat/completions', [
-                        'model'       => 'llama-3.3-70b-versatile',
-                        'messages'    => $messages,
-                        'max_tokens'  => 150,
-                        'temperature' => 0.8,
-                    ]);
-
-                if ($response->successful()) {
-                    $text = $response->json('choices.0.message.content');
-                    if (!empty($text)) {
-                        return [$text, 'Groq (Llama 3.3)'];
-                    }
-                }
-            } catch (\Throwable $e) {
-                Log::warning('Groq API error, fallback ke jawaban lokal: ' . $e->getMessage());
+                return response()->json([
+                    'result' => $aiText,
+                    'provider' => 'groq',
+                ]);
             }
+
+            Log::error('Groq API Error: ' . $response->body());
+
+            return response()->json([
+                'result' => 'Maaf, sistem mengalami kendala koneksi ke server AI. Bisakah kamu mengulangi jawabanmu?',
+                'provider' => 'fallback',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('InterviewApiController Chat Exception: ' . $e->getMessage());
+
+            return response()->json([
+                'result' => 'Maaf, terjadi gangguan jaringan saat memproses jawabanmu.',
+                'provider' => 'fallback',
+            ]);
         }
-
-        $fallback = 'Terima kasih sudah menjawab. Boleh diceritakan sedikit lebih detail lagi?';
-
-        return [$fallback, 'Lokal'];
     }
 
-    /**
-     * GET /api/history
-     * Menggantikan endpoint /api/history di server.js.
-     */
     public function history(Request $request)
     {
-        $request->validate([
-            'room_id' => 'nullable|string|max:100',
-        ]);
-
-        $query = ChatHistory::query()->orderByDesc('timestamp');
-
-        if ($roomId = $request->query('room_id')) {
-            $query->where('room_id', $roomId);
-        } else {
-            $query->limit(200);
-        }
-
-        return response()->json($query->get());
+        return response()->json(['history' => []]);
     }
 
-    /**
-     * POST /api/tts
-     * Menggantikan endpoint /api/tts di server.js. Menggunakan Process facade
-     * (bukan shell string mentah) supaya input teks tidak rawan command injection.
-     */
     public function tts(Request $request)
     {
-        $validated = $request->validate([
-            'text'  => 'required|string|max:2000',
-            'voice' => 'nullable|string|in:id-ID-ArdiNeural,id-ID-GadisNeural',
-        ]);
-
-        $voice     = $validated['voice'] ?? 'id-ID-ArdiNeural';
-        $cleanText = trim(preg_replace('/[*_~#"`\\\\]/', '', $validated['text']));
-
-        if ($cleanText === '') {
-            return response()->json(['error' => 'Teks kosong'], 422);
-        }
-
-        $tmpDir = storage_path('app/tmp');
-        if (!is_dir($tmpDir)) {
-            mkdir($tmpDir, 0755, true);
-        }
-        $tempFile = $tmpDir . '/tts_' . Str::random(16) . '.mp3';
-
-        $result = Process::timeout(30)->run([
-            'python3', '-m', 'edge_tts',
-            '--voice', $voice,
-            '--text', $cleanText,
-            '--write-media', $tempFile,
-        ]);
-
-        if ($result->failed() || !file_exists($tempFile)) {
-            Log::error('Edge-TTS error: ' . $result->errorOutput());
-
-            return response()->json(['error' => 'Gagal generate suara TTS'], 500);
-        }
-
-        return response()
-            ->download($tempFile, 'tts.mp3', ['Content-Type' => 'audio/mpeg'])
-            ->deleteFileAfterSend(true);
+        return response()->json(['message' => 'TTS endpoint ready']);
     }
 
-    /**
-     * POST /api/interview/finish
-     * Endpoint baru (opsional) untuk merekap sesi wawancara ke tabel `interviews`
-     * saat sesi selesai — dipanggil dari saveResultToBackend() di frontend.
-     */
     public function finish(Request $request)
     {
-        $validated = $request->validate([
-            'room_id'              => 'required|string|max:100',
-            'student_name'         => 'required|string|max:150',
-            'avg_stress'           => 'nullable|numeric|min:0|max:100',
-            'psychological_report' => 'nullable|string',
-            'telemetry_logs'       => 'nullable|array',
-        ]);
+        return response()->json(['success' => true, 'message' => 'Interview finished']);
+    }
 
-        $interview = Interview::updateOrCreate(
-            ['room_id' => $validated['room_id']],
-            [
-                'student_name'         => $validated['student_name'],
-                'avg_stress'           => $validated['avg_stress'] ?? null,
-                'psychological_report' => $validated['psychological_report'] ?? null,
-                'telemetry_logs'       => $validated['telemetry_logs'] ?? [],
-            ]
-        );
+    private function getSystemPrompt()
+    {
+        return <<<'PROMPT'
+Anda adalah AI interviewer untuk proses penerimaan siswa baru.
 
-        return response()->json($interview);
+Tugas utama Anda adalah melakukan wawancara seperti percakapan nyata antara HRD/guru dengan calon siswa.
+
+ATURAN UTAMA:
+1. Dengarkan jawaban terakhir siswa dengan seksama.
+2. Jangan langsung berpindah ke pertanyaan berikutnya jika jawaban siswa masih bisa digali.
+3. Gunakan detail dari jawaban siswa untuk membuat pertanyaan lanjutan yang relevan.
+4. Pertanyaan lanjutan harus berhubungan dengan jawaban terakhir siswa.
+5. Jika siswa memberikan jawaban singkat, gunakan pertanyaan probing untuk menggali lebih dalam.
+6. Jangan menggunakan pertanyaan template secara kaku.
+7. Jangan mengatakan "Jawabanmu sudah tersimpan" sebagai respons default.
+8. Jangan mengulang pertanyaan yang sudah dijawab.
+9. Setelah suatu topik sudah cukup digali, barulah pindah ke topik lain secara natural.
+10. Jangan memberikan penilaian lulus atau tidak lulus.
+11. Gunakan bahasa Indonesia yang santai tetapi tetap sopan dan profesional.
+12. Respons maksimal 2-3 kalimat pendek.
+13. Biasakan memberikan respons singkat terhadap jawaban siswa sebelum bertanya.
+
+TOPIK YANG PERLU DICOBA DIGALI SELAMA WAWANCARA:
+- Alasan memilih sekolah.
+- Hobi atau aktivitas di luar sekolah.
+- Minat terhadap jurusan.
+- Cita-cita dan tujuan.
+- Cara menghadapi kesulitan belajar.
+
+CONTOH:
+
+Siswa:
+"Karena sekolahnya bagus."
+
+AI:
+"Ooh, bagus. Menurut kamu, bagian mana dari sekolah ini yang paling menarik?"
+
+Siswa:
+"Fasilitas komputernya."
+
+AI:
+"Ohh, berarti fasilitas komputer cukup menarik buat kamu. Kamu memang dari dulu tertarik dengan komputer?"
+
+Siswa:
+"Iya, dari SMP."
+
+AI:
+"Menarik, berarti sudah cukup lama ya. Biasanya kamu paling suka melakukan apa saat menggunakan komputer?"
+
+PENTING:
+Jangan hanya memberikan pertanyaan berikutnya dari daftar topik.
+Jadikan jawaban siswa sebagai dasar utama untuk menentukan pertanyaan berikutnya.
+Tujuan wawancara adalah menggali siswa secara natural, bukan sekadar membacakan daftar pertanyaan.
+PROMPT;
     }
 }

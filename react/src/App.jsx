@@ -110,7 +110,7 @@ export default function App() {
     const nextStep = stepRef.current + 1;
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('API Timeout')), 3000)
+      setTimeout(() => reject(new Error('API Timeout')), 20000)
     );
 
     try {
@@ -134,14 +134,18 @@ export default function App() {
       setAiEmotion(emotion);
 
       if (nextStep < INITIAL_QUESTIONS.length) {
+        // AI menentukan pertanyaan lanjutan berdasarkan jawaban siswa.
+        // INITIAL_QUESTIONS hanya digunakan sebagai batas jumlah sesi,
+        // bukan sebagai pertanyaan yang dipaksakan ke siswa.
         stepRef.current = nextStep;
-        const nextQ = INITIAL_QUESTIONS[nextStep];
-        const fullReply = `${cleanText}\n\n${nextQ}`;
 
-        setChatHistory((prev) => [...prev, { role: 'assistant', content: fullReply }]);
-        setTextToSpeak(fullReply);
+        setChatHistory((prev) => [
+          ...prev,
+          { role: 'assistant', content: cleanText }
+        ]);
+        setTextToSpeak(cleanText);
       } else {
-        const finalReply = `${cleanText}\n\nTerima kasih, seluruh pertanyaan wawancara telah selesai!`;
+        const finalReply = `${cleanText}\n\nTerima kasih, wawancara kita sudah selesai!`;
         const finalHistory = [...updatedHistory, { role: 'assistant', content: finalReply }];
         setChatHistory(finalHistory);
         setTextToSpeak(finalReply);
@@ -150,8 +154,11 @@ export default function App() {
     } catch (err) {
       if (nextStep < INITIAL_QUESTIONS.length) {
         stepRef.current = nextStep;
-        const fallback = `Terima kasih! Jawabanmu sudah tersimpan.\n\n${INITIAL_QUESTIONS[nextStep]}`;
-        setChatHistory((prev) => [...prev, { role: 'assistant', content: fallback }]);
+        const fallback = 'Boleh ceritakan sedikit lebih detail tentang jawabanmu tadi?';
+        setChatHistory((prev) => [
+          ...prev,
+          { role: 'assistant', content: fallback }
+        ]);
         setTextToSpeak(fallback);
       } else {
         const finalFallback = "Terima kasih! Seluruh pertanyaan wawancara telah selesai.";
