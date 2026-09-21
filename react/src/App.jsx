@@ -5,7 +5,9 @@ import ChatContainer from './components/ChatContainer';
 import VoiceController from './components/VoiceController';
 import AiAvatar from './components/AiAvatar';
 import AdminDashboard from './components/AdminDashboard';
-import { sendChatMessage, finishInterview } from './api/interviewApi';
+import { sendChatMessage, startInterview, finishInterview } from './api/interviewApi';
+
+const MAX_FOLLOW_UPS = 2;
 
 const INITIAL_QUESTIONS = [
   'Halo! Boleh cerita, apa alasan utama kamu memilih sekolah kami sebagai pilihanmu?',
@@ -23,11 +25,13 @@ function makeRoomId() {
 export default function App() {
   const [roomId] = useState(makeRoomId);
   const [studentName, setStudentName] = useState('');
+  const [interviewId, setInterviewId] = useState(null);
   const [stage, setStage] = useState('candidate');
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
   const stepRef = useRef(0);
+  const followUpRef = useRef(0);
   const isProcessingRef = useRef(false);
 
   const [chatHistory, setChatHistory] = useState([]);
@@ -58,18 +62,37 @@ export default function App() {
   async function handleStartInterview(name) {
     setCameraLoading(true);
     setCameraError(null);
-    setStudentName(name);
-    setStage('interview');
 
-    if ('speechSynthesis' in window) {
-      const unlockUtterance = new SpeechSynthesisUtterance('');
-      window.speechSynthesis.speak(unlockUtterance);
+    try {
+      const response = await startInterview({
+        roomId,
+        studentName: name,
+      });
+
+      if (!response?.interview_id) {
+        throw new Error('Server tidak mengembalikan interview_id.');
+      }
+
+      setStudentName(name);
+      setInterviewId(response.interview_id);
+      setStage('interview');
+
+      if ('speechSynthesis' in window) {
+        const unlockUtterance = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(unlockUtterance);
+      }
+    } catch (error) {
+      console.error('Gagal memulai interview:', error);
+      setCameraLoading(false);
+      setCameraError(error.message || 'Gagal memulai sesi wawancara.');
+      setStage('candidate');
     }
   }
 
   function handleCameraReady() {
     setCameraLoading(false);
     stepRef.current = 0;
+    followUpRef.current = 0;
     const opening = `Halo ${studentName}! ${INITIAL_QUESTIONS[0]}`;
     setChatHistory([{ role: 'assistant', content: opening }]);
     setTextToSpeak(opening);
@@ -103,19 +126,27 @@ export default function App() {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
 
-    const updatedHistory = [...chatHistory, { role: 'user', content: answerText }];
+    const updatedHistory = [
+      ...chatHistory,
+      { role: 'user', content: answerText }
+    ];
+
     setChatHistory(updatedHistory);
     setAiState('thinking');
 
-    const nextStep = stepRef.current + 1;
+    const currentQuestionIndex = stepRef.current;
+    const currentFollowUp = followUpRef.current;
 
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('API Timeout')), 20000)
     );
 
     try {
-      const history = updatedHistory.map(({ role, content }) => ({ role, content }));
-      
+      const history = updatedHistory.map(({ role, content }) => ({
+        role,
+        content
+      }));
+
       const fetchPromise = sendChatMessage({
         promptText: answerText,
         history,
@@ -127,45 +158,151 @@ export default function App() {
         energiSuara: audioTelemetry.energy,
       });
 
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-      const rawFeedback = response?.result || 'Terima kasih atas jawabanmu!';
-      
+      const response = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]);
+
+      const rawFeedback =
+        response?.result ||
+        'Terima kasih atas jawabanmu.';
+
       const { emotion, cleanText } = parseAiResponse(rawFeedback);
       setAiEmotion(emotion);
 
-      if (nextStep < INITIAL_QUESTIONS.length) {
-        // AI menentukan pertanyaan lanjutan berdasarkan jawaban siswa.
-        // INITIAL_QUESTIONS hanya digunakan sebagai batas jumlah sesi,
-        // bukan sebagai pertanyaan yang dipaksakan ke siswa.
-        stepRef.current = nextStep;
+      /*
+       * CONTROLLER WAWANCARA
+       *
+       * currentQuestionIndex = pertanyaan utama yang sedang dibahas.
+       * followUpRef = jumlah probing pada pertanyaan tersebut.
+       *
+       * AI boleh menggali maksimal MAX_FOLLOW_UPS kali.
+       * Setelah batas tercapai, controller memaksa pindah
+       * ke pertanyaan utama berikutnya.
+       */
+
+      if (currentFollowUp < MAX_FOLLOW_UPS) {
+        followUpRef.current += 1;
 
         setChatHistory((prev) => [
           ...prev,
-          { role: 'assistant', content: cleanText }
+          {
+            role: 'assistant',
+            content: cleanText
+          }
         ]);
+
         setTextToSpeak(cleanText);
       } else {
-        const finalReply = `${cleanText}\n\nTerima kasih, wawancara kita sudah selesai!`;
-        const finalHistory = [...updatedHistory, { role: 'assistant', content: finalReply }];
-        setChatHistory(finalHistory);
-        setTextToSpeak(finalReply);
-        setTimeout(() => finishSession(finalHistory), 3000);
+        const nextQuestionIndex = currentQuestionIndex + 1;
+
+        if (nextQuestionIndex < INITIAL_QUESTIONS.length) {
+          stepRef.current = nextQuestionIndex;
+          followUpRef.current = 0;
+
+          const nextQuestion =
+            INITIAL_QUESTIONS[nextQuestionIndex];
+
+          // Saat follow-up sudah mencapai batas,
+          // controller langsung pindah ke pertanyaan utama berikutnya.
+          // Jangan gabungkan respons AI sebelumnya dengan pertanyaan utama,
+          // karena respons AI bisa mengandung pertanyaan tambahan.
+          setChatHistory((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: nextQuestion
+            }
+          ]);
+
+          setTextToSpeak(nextQuestion);
+        } else {
+          const finalReply =
+            `${cleanText}
+
+Terima kasih, wawancara kita sudah selesai!`;
+
+          const finalHistory = [
+            ...updatedHistory,
+            {
+              role: 'assistant',
+              content: finalReply
+            }
+          ];
+
+          setChatHistory(finalHistory);
+          setTextToSpeak(finalReply);
+
+          setTimeout(
+            () => finishSession(finalHistory),
+            3000
+          );
+        }
       }
     } catch (err) {
-      if (nextStep < INITIAL_QUESTIONS.length) {
-        stepRef.current = nextStep;
-        const fallback = 'Boleh ceritakan sedikit lebih detail tentang jawabanmu tadi?';
+      console.error('Gagal memproses jawaban:', err);
+
+      /*
+       * Kalau Groq gagal, controller tetap menjaga
+       * struktur wawancara. Jangan sampai error API
+       * mengubah jumlah pertanyaan secara acak.
+       */
+
+      if (currentFollowUp < MAX_FOLLOW_UPS) {
+        followUpRef.current += 1;
+
+        const fallback =
+          'Boleh ceritakan sedikit lebih detail tentang jawabanmu tadi?';
+
         setChatHistory((prev) => [
           ...prev,
-          { role: 'assistant', content: fallback }
+          {
+            role: 'assistant',
+            content: fallback
+          }
         ]);
+
         setTextToSpeak(fallback);
       } else {
-        const finalFallback = "Terima kasih! Seluruh pertanyaan wawancara telah selesai.";
-        const finalHistory = [...updatedHistory, { role: 'assistant', content: finalFallback }];
-        setChatHistory(finalHistory);
-        setTextToSpeak(finalFallback);
-        setTimeout(() => finishSession(finalHistory), 3000);
+        const nextQuestionIndex =
+          currentQuestionIndex + 1;
+
+        if (nextQuestionIndex < INITIAL_QUESTIONS.length) {
+          stepRef.current = nextQuestionIndex;
+          followUpRef.current = 0;
+
+          const nextQuestion =
+            INITIAL_QUESTIONS[nextQuestionIndex];
+
+          setChatHistory((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: nextQuestion
+            }
+          ]);
+
+          setTextToSpeak(nextQuestion);
+        } else {
+          const finalFallback =
+            'Terima kasih! Seluruh pertanyaan wawancara telah selesai.';
+
+          const finalHistory = [
+            ...updatedHistory,
+            {
+              role: 'assistant',
+              content: finalFallback
+            }
+          ];
+
+          setChatHistory(finalHistory);
+          setTextToSpeak(finalFallback);
+
+          setTimeout(
+            () => finishSession(finalHistory),
+            3000
+          );
+        }
       }
     } finally {
       isProcessingRef.current = false;
@@ -220,7 +357,8 @@ export default function App() {
       dominantTone,
       date: new Date().toLocaleString('id-ID'),
       chatHistory: latestHistory,
-      samplesCount: samples.length
+      samplesCount: samples.length,
+      telemetrySamples: samples
     };
 
     try {

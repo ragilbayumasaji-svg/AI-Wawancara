@@ -13,6 +13,28 @@ async function parseJsonSafely(response) {
 }
 
 /**
+ * Membuat sesi interview baru di Laravel.
+ */
+export async function startInterview({ roomId, studentName }) {
+  const response = await fetch(`${API_BASE}/interview/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      room_id: roomId,
+      student_name: studentName,
+    }),
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Gagal memulai sesi wawancara.');
+  }
+
+  return data;
+}
+
+/**
  * Kirim jawaban siswa ke AI HRD dan terima balasan + pertanyaan lanjutan.
  * @param {{ promptText: string, history: {role:string, content:string}[], roomId: string, studentName?: string, ekspresi?: string, stresLevel?: number }} payload
  */

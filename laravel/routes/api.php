@@ -6,4 +6,5 @@ use Illuminate\Support\Facades\Route;
 Route::post('/ai-chat', [InterviewApiController::class, 'chat']);
 Route::get('/history', [InterviewApiController::class, 'history']);
 Route::post('/tts', [InterviewApiController::class, 'tts']);
+Route::post('/interview/start', [InterviewApiController::class, 'start']);
 Route::post('/interview/finish', [InterviewApiController::class, 'finish']);
