@@ -15,6 +15,52 @@ async function parseJsonSafely(response) {
 /**
  * Membuat sesi interview baru di Laravel.
  */
+export async function login(email, password) {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Login gagal.');
+  }
+
+  return data.user;
+}
+
+export async function getCurrentUser() {
+  const response = await fetch(`${API_BASE}/auth/me`, {
+    credentials: 'include',
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return data.user || null;
+}
+
+export async function logout() {
+  const response = await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Logout gagal.');
+  }
+
+  return data;
+}
+
 export async function startInterview({ roomId, studentName }) {
   const response = await fetch(`${API_BASE}/interview/start`, {
     method: 'POST',
@@ -45,6 +91,8 @@ export async function sendChatMessage({
   studentName = null,
   ekspresi = null,
   stresLevel = null,
+  nadaSuara = null,
+  energiSuara = null,
 }) {
   const response = await fetch(`${API_BASE}/ai-chat`, {
     method: 'POST',
@@ -56,6 +104,8 @@ export async function sendChatMessage({
       student_name: studentName,
       ekspresi,
       stres_level: stresLevel,
+      nada_suara: nadaSuara,
+      energi_suara: energiSuara,
     }),
   });
 
@@ -104,7 +154,14 @@ export async function fetchTtsAudioUrl(text, voice = 'id-ID-ArdiNeural') {
 /**
  * Simpan rekap akhir sesi wawancara.
  */
-export async function finishInterview({ roomId, studentName, avgStress, psychologicalReport, telemetryLogs }) {
+export async function finishInterview({
+  roomId,
+  studentName,
+  avgStress,
+  psychologicalReport,
+  telemetryLogs,
+  chatHistory,
+}) {
   const response = await fetch(`${API_BASE}/interview/finish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -114,6 +171,7 @@ export async function finishInterview({ roomId, studentName, avgStress, psycholo
       avg_stress: avgStress,
       psychological_report: psychologicalReport,
       telemetry_logs: telemetryLogs,
+      chat_history: chatHistory,
     }),
   });
 
@@ -121,5 +179,63 @@ export async function finishInterview({ roomId, studentName, avgStress, psycholo
   if (!response.ok) {
     throw new Error(data.error || 'Gagal menyimpan rekap wawancara.');
   }
+  return data;
+}
+
+/**
+ * Ambil statistik dashboard guru/admin.
+ * Endpoint dilindungi middleware teacher.admin.
+ */
+export async function fetchTeacherDashboard() {
+  const response = await fetch(`${API_BASE}/teacher/dashboard`, {
+    credentials: 'include',
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Gagal mengambil dashboard guru.');
+  }
+
+  return data;
+}
+
+/**
+ * Ambil daftar seluruh sesi wawancara untuk guru/admin.
+ */
+export async function fetchTeacherInterviews() {
+  const response = await fetch(`${API_BASE}/teacher/interviews`, {
+    credentials: 'include',
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Gagal mengambil daftar wawancara.');
+  }
+
+  return data;
+}
+
+/**
+ * Ambil detail satu sesi wawancara:
+ * identitas, hasil, jawaban, dan telemetry.
+ */
+export async function fetchTeacherInterviewDetail(interviewId) {
+  const response = await fetch(
+    `${API_BASE}/teacher/interviews/${encodeURIComponent(interviewId)}`,
+    {
+      credentials: 'include',
+    }
+  );
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || data.error || 'Gagal mengambil detail wawancara.'
+    );
+  }
+
   return data;
 }

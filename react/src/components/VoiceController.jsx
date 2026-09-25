@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Meyda from 'meyda';
+import { fetchTtsAudioUrl } from '../api/interviewApi';
 
 export default function VoiceController({ disabled, onSubmit, textToSpeak, onSpeakStart, onSpeakEnd, onAudioTelemetry, emotion = 'neutral' }) {
   const [isListening, setIsListening] = useState(false);
@@ -37,34 +38,61 @@ export default function VoiceController({ disabled, onSubmit, textToSpeak, onSpe
     }
   }, []);
 
-  // Text-To-Speech dengan Dinamika Nada Berdasarkan Emosi AI
+  // Text-To-Speech menggunakan Laravel + Edge-TTS
   useEffect(() => {
-    if (textToSpeak && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.lang = 'id-ID';
+    if (!textToSpeak) return;
 
-      // Mengatur Pitch & Kecepatan Suara Sesuai Emosi AI
-      if (emotion === 'happy') {
-        utterance.pitch = 1.3; // Lebih bernada tinggi & ceria
-        utterance.rate = 1.1;  // Sedikit lebih cepat
-      } else if (emotion === 'empathetic') {
-        utterance.pitch = 0.85; // Suara lebih hangat & tenang
-        utterance.rate = 0.9;   // Bicara perlahan
-      } else if (emotion === 'curious') {
-        utterance.pitch = 1.2;
-        utterance.rate = 1.0;
-      } else {
-        utterance.pitch = 1.0;
-        utterance.rate = 1.0;
+    let cancelled = false;
+    let audio = null;
+    let audioUrl = null;
+
+    const speak = async () => {
+      try {
+        onSpeakStart && onSpeakStart();
+
+        audioUrl = await fetchTtsAudioUrl(
+          textToSpeak,
+          'id-ID-ArdiNeural'
+        );
+
+        if (cancelled) {
+          URL.revokeObjectURL(audioUrl);
+          return;
+        }
+
+        audio = new Audio(audioUrl);
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          onSpeakEnd && onSpeakEnd();
+        };
+
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          onSpeakEnd && onSpeakEnd();
+        };
+
+        await audio.play();
+      } catch (error) {
+        console.error('TTS Error:', error);
+        onSpeakEnd && onSpeakEnd();
+      }
+    };
+
+    speak();
+
+    return () => {
+      cancelled = true;
+
+      if (audio) {
+        audio.pause();
+        audio.src = '';
       }
 
-      utterance.onstart = () => onSpeakStart && onSpeakStart();
-      utterance.onend = () => onSpeakEnd && onSpeakEnd();
-      utterance.onerror = () => onSpeakEnd && onSpeakEnd();
-
-      window.speechSynthesis.speak(utterance);
-    }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
   }, [textToSpeak, emotion]);
 
   const startAudioAnalysis = async () => {

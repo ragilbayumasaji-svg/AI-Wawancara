@@ -1,11 +1,18 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import CandidateForm from './components/CandidateForm';
 import TelemetryPanel from './components/TelemetryPanel';
 import ChatContainer from './components/ChatContainer';
 import VoiceController from './components/VoiceController';
 import AiAvatar from './components/AiAvatar';
 import AdminDashboard from './components/AdminDashboard';
-import { sendChatMessage, startInterview, finishInterview } from './api/interviewApi';
+import {
+  sendChatMessage,
+  startInterview,
+  finishInterview,
+  login,
+  logout,
+  getCurrentUser,
+} from './api/interviewApi';
 
 const MAX_FOLLOW_UPS = 2;
 
@@ -30,6 +37,14 @@ export default function App() {
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
   const stepRef = useRef(0);
   const followUpRef = useRef(0);
   const isProcessingRef = useRef(false);
@@ -45,6 +60,73 @@ export default function App() {
 
   const telemetrySamplesRef = useRef([]);
   const webcamRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const user = await getCurrentUser();
+
+        if (!cancelled) {
+          setCurrentUser(user);
+        }
+      } catch (error) {
+        console.error('Gagal mengecek login:', error);
+
+        if (!cancelled) {
+          setCurrentUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthLoading(false);
+        }
+      }
+    }
+
+    checkAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleTeacherLogin(event) {
+    event.preventDefault();
+
+    setLoginLoading(true);
+    setLoginError('');
+
+    try {
+      const user = await login(loginEmail.trim(), loginPassword);
+
+      if (!['teacher', 'admin'].includes(user?.role)) {
+        throw new Error('Akun ini tidak memiliki akses dashboard guru.');
+      }
+
+      setCurrentUser(user);
+      setShowLogin(false);
+      setLoginPassword('');
+      setStage('admin');
+    } catch (error) {
+      setLoginError(error.message || 'Login gagal.');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
+  async function handleTeacherLogout() {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout gagal:', error);
+    } finally {
+      setCurrentUser(null);
+      setStage('candidate');
+      setShowLogin(false);
+      setLoginPassword('');
+    }
+  }
 
   function handleTelemetryUpdate(data) {
     setLiveTelemetry(data);
@@ -362,14 +444,14 @@ Terima kasih, wawancara kita sudah selesai!`;
     };
 
     try {
-      const existing = JSON.parse(localStorage.getItem('interview_results') || '[]');
-      localStorage.setItem('interview_results', JSON.stringify([newRecord, ...existing]));
-    } catch (e) {
-      console.error('Gagal simpan lokal:', e);
-    }
-
-    try {
-      await finishInterview({ roomId, studentName, avgStress, psychologicalReport: null, telemetryLogs: samples });
+      await finishInterview({
+        roomId,
+        studentName,
+        avgStress,
+        psychologicalReport: null,
+        telemetryLogs: samples,
+        chatHistory: latestHistory,
+      });
     } catch (err) {}
   }
 
@@ -392,18 +474,71 @@ Terima kasih, wawancara kita sudah selesai!`;
               </div>
             )}
 
-            <button
-              onClick={() => setStage(stage === 'admin' ? 'candidate' : 'admin')}
-              className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition flex items-center space-x-1.5"
-            >
-              <span>{stage === 'admin' ? '👤 Mode Siswa' : '📊 Dashboard Guru'}</span>
-            </button>
+            {!authLoading && ['teacher', 'admin'].includes(currentUser?.role) && (
+              <>
+                <button
+                  onClick={() =>
+                    setStage(stage === 'admin' ? 'candidate' : 'admin')
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                >
+                  <span>
+                    {stage === 'admin'
+                      ? '👤 Mode Siswa'
+                      : '📊 Dashboard Guru'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleTeacherLogout}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition"
+                >
+                  Keluar
+                </button>
+              </>
+            )}
+
+            {!authLoading && !currentUser && (
+              <button
+                onClick={() => {
+                  setShowLogin(true);
+                  setLoginError('');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition"
+              >
+                🔐 Login Guru
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-3 relative flex flex-col overflow-hidden">
-        {stage === 'admin' && <AdminDashboard onBack={() => setStage('candidate')} />}
+        {stage === 'admin' &&
+          ['teacher', 'admin'].includes(currentUser?.role) && (
+            <AdminDashboard
+              onBack={() => setStage('candidate')}
+            />
+          )}
+
+        {stage === 'admin' &&
+          !['teacher', 'admin'].includes(currentUser?.role) && (
+            <div className="max-w-md mx-auto my-auto bg-white p-8 rounded-2xl border border-rose-200 shadow-sm text-center">
+              <div className="text-4xl mb-3">🔒</div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                Akses Ditolak
+              </h2>
+              <p className="text-sm text-gray-500 mb-5">
+                Dashboard rekapitulasi hanya dapat diakses oleh guru atau admin.
+              </p>
+              <button
+                onClick={() => setStage('candidate')}
+                className="bg-maroon-600 hover:bg-maroon-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                Kembali
+              </button>
+            </div>
+          )}
 
         {stage === 'candidate' && (
           <>
@@ -460,15 +595,94 @@ Terima kasih, wawancara kita sudah selesai!`;
               >
                 Ulangi Sesi
               </button>
-              <button
-                onClick={() => setStage('admin')}
-                className="bg-maroon-600 hover:bg-maroon-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition"
-              >
-                Buka Dashboard Admin
-              </button>
+              {['teacher', 'admin'].includes(currentUser?.role) && (
+                <button
+                  onClick={() => setStage('admin')}
+                  className="bg-maroon-600 hover:bg-maroon-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition"
+                >
+                  📊 Buka Dashboard Guru
+                </button>
+              )}
             </div>
           </div>
         )}
+        {showLogin && (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+            <form
+              onSubmit={handleTeacherLogin}
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 p-6"
+            >
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">
+                    🔐 Login Guru
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Masuk untuk melihat rekapitulasi wawancara siswa.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLogin(false);
+                    setLoginError('');
+                  }}
+                  className="text-gray-400 hover:text-gray-700 text-xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(event) => setLoginEmail(event.target.value)}
+                    autoComplete="username"
+                    required
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-maroon-600"
+                    placeholder="Email guru"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    autoComplete="current-password"
+                    required
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-maroon-600"
+                    placeholder="Password"
+                  />
+                </div>
+
+                {loginError && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-3 py-2.5 text-sm">
+                    {loginError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full bg-maroon-600 hover:bg-maroon-700 disabled:opacity-60 text-white py-2.5 rounded-xl text-sm font-semibold transition"
+                >
+                  {loginLoading ? 'Memproses...' : 'Masuk ke Dashboard'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
       </main>
     </div>
   );

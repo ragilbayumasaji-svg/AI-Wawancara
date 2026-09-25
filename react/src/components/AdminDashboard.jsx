@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import {
+  fetchTeacherInterviews,
+  fetchTeacherInterviewDetail,
+} from '../api/interviewApi';
 
 const INITIAL_QUESTIONS = [
   'Halo! Boleh cerita, apa alasan utama kamu memilih sekolah kami sebagai pilihanmu?',
@@ -94,32 +98,164 @@ export default function AdminDashboard({ onBack }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const [teacherNotes, setTeacherNotes] = useState('');
 
-  useEffect(() => {
-    try {
-      const data = JSON.parse(
-        localStorage.getItem('interview_results') || '[]'
-      );
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [error, setError] = useState('');
 
-      setResults(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Gagal membaca data hasil wawancara:', e);
-      setResults([]);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInterviews() {
+      try {
+        setLoading(true);
+        setError('');
+
+        const data = await fetchTeacherInterviews();
+
+        if (!cancelled) {
+          const interviews = Array.isArray(data.interviews)
+            ? data.interviews
+            : [];
+
+          const normalized = interviews.map((item) => ({
+            ...item,
+            studentName: item.student_name || '-',
+            roomId: item.room_id || '-',
+            date: item.created_at,
+            samplesCount: 0,
+            chatHistory: [],
+            telemetrySamples: [],
+            teacherNotes: '',
+          }));
+
+          setResults(normalized);
+          setSelectedIndex(0);
+        }
+      } catch (e) {
+        console.error('Gagal mengambil daftar wawancara:', e);
+
+        if (!cancelled) {
+          setError(e.message || 'Gagal mengambil data wawancara.');
+          setResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
+
+    loadInterviews();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleClear = () => {
-    if (
-      window.confirm(
-        'Apakah Anda yakin ingin menghapus seluruh data hasil wawancara?'
-      )
-    ) {
-      localStorage.removeItem('interview_results');
-      setResults([]);
-      setSelectedIndex(0);
-    }
-  };
-
   const selectedCandidate = results[selectedIndex] || null;
+
+  useEffect(() => {
+    if (!selectedCandidate?.id) return;
+
+    let cancelled = false;
+
+    async function loadDetail() {
+      try {
+        setDetailLoading(true);
+        setError('');
+
+        const data = await fetchTeacherInterviewDetail(selectedCandidate.id);
+
+        if (cancelled) return;
+
+        const interview = data.interview || {};
+        const answers = Array.isArray(data.answers) ? data.answers : [];
+        const telemetry = Array.isArray(data.telemetry) ? data.telemetry : [];
+
+        const chatHistory = [];
+
+        answers.forEach((answer) => {
+          if (answer.question_text) {
+            chatHistory.push({
+              role: 'assistant',
+              content: answer.question_text,
+            });
+          }
+
+          if (answer.user_answer) {
+            chatHistory.push({
+              role: 'user',
+              content: answer.user_answer,
+            });
+          }
+
+          if (answer.ai_response) {
+            chatHistory.push({
+              role: 'assistant',
+              content: answer.ai_response,
+            });
+          }
+        });
+
+        const telemetrySamples = telemetry.map((item) => ({
+          timestamp: item.recorded_at,
+          elapsedSeconds: item.elapsed_seconds,
+          expression: item.expression,
+          gaze: item.gaze,
+          stress: item.stress_level,
+          energy: item.audio_energy,
+          volumeLabel: item.volume_label,
+        }));
+
+        const updatedCandidate = {
+          ...selectedCandidate,
+          studentName:
+            interview.student_name ||
+            selectedCandidate.studentName ||
+            '-',
+          roomId:
+            interview.room_id ||
+            selectedCandidate.roomId ||
+            '-',
+          avgStress:
+            data.result?.avg_stress ??
+            interview.avg_stress ??
+            null,
+          chatHistory,
+          telemetrySamples,
+          samplesCount: telemetrySamples.length,
+          teacherNotes: data.result?.teacher_notes || '',
+          result: data.result || null,
+        };
+
+        setResults((current) =>
+          current.map((item) =>
+            item.id === selectedCandidate.id
+              ? updatedCandidate
+              : item
+          )
+        );
+      } catch (e) {
+        console.error('Gagal mengambil detail wawancara:', e);
+
+        if (!cancelled) {
+          setError(
+            e.message || 'Gagal mengambil detail wawancara.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setDetailLoading(false);
+        }
+      }
+    }
+
+    loadDetail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCandidate?.id]);
 
   useEffect(() => {
     setTeacherNotes(selectedCandidate?.teacherNotes || '');
@@ -165,10 +301,10 @@ export default function AdminDashboard({ onBack }) {
 
         <div className="flex space-x-2">
           <button
-            onClick={handleClear}
+            onClick={() => window.location.reload()}
             className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-semibold transition"
           >
-            🗑️ Hapus Semua Data
+            🔄 Muat Ulang Data
           </button>
 
           <button
@@ -188,7 +324,21 @@ export default function AdminDashboard({ onBack }) {
             Daftar Calon Siswa ({results.length})
           </h3>
 
-          {results.length === 0 ? (
+          {loading ? (
+            <div className="p-6 text-center text-gray-400 text-xs">
+              Memuat data wawancara...
+            </div>
+          ) : error ? (
+            <div className="p-5 text-center">
+              <div className="text-2xl mb-2">⚠️</div>
+              <p className="text-xs font-semibold text-rose-600">
+                Gagal memuat dashboard.
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1 break-words">
+                {error}
+              </p>
+            </div>
+          ) : results.length === 0 ? (
             <div className="p-6 text-center text-gray-400 text-xs">
               Belum ada data wawancara tersimpan.
             </div>

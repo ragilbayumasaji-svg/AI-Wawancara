@@ -19,3 +19,11 @@ npm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Local Python virtual environment
+edge-tts-env/
+
+# Local backup files
+*.bak
+*.backup
+*.backup-*
