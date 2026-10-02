@@ -192,6 +192,12 @@ export default function VoiceController({
     }
     voiceActiveRef.current = false;
     smoothedRmsRef.current = 0;
+    onAudioTelemetryRef.current?.({
+      energy: null,
+      volumeLabel: null,
+      zcr: null,
+      active: false,
+    });
 
     const bars = barsRef.current?.children;
     if (bars) for (const bar of bars) bar.style.transform = 'scaleY(0.2)';
@@ -257,6 +263,7 @@ export default function VoiceController({
               energy: Math.round(rms * 100),
               volumeLabel: toneLabel,
               zcr: Math.round(zcr),
+              active: true,
             });
           }
         },

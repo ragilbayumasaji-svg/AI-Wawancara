@@ -79,8 +79,8 @@ export default function App() {
   const [questionNumber, setQuestionNumber] = useState(1);
 
   // ---- Telemetri wajah & audio: disimpan di ref agar App tidak re-render 30x/detik ----
-  const liveTelemetryRef = useRef({ stress: 0, gaze: 'Depan', expression: 'Netral / Santai' });
-  const audioTelemetryRef = useRef({ energy: 0, volumeLabel: 'Normal / Stabil' });
+  const liveTelemetryRef = useRef({ facialTension: null, gaze: 'Depan', expression: 'Netral / Santai', timestamp: null });
+  const audioTelemetryRef = useRef({ energy: null, volumeLabel: null, zcr: null, active: false, timestamp: null });
   const lastSampleAtRef = useRef(0);
   const telemetrySamplesRef = useRef([]);
   const webcamRef = useRef(null);
@@ -160,32 +160,55 @@ export default function App() {
   }
 
   function handleTelemetryUpdate(data) {
-    liveTelemetryRef.current = data;
-
-    if (stageRef.current !== 'interview') return;
-
-    // Sampel disimpan 1x/detik (bukan tiap frame ~30fps) supaya rekap ringan.
-    const now = Date.now();
-    if (now - lastSampleAtRef.current < TELEMETRY_SAMPLE_INTERVAL_MS) return;
-    lastSampleAtRef.current = now;
-
-    telemetrySamplesRef.current.push({
-      stress: data.stress || 0,
-      expression: data.expression || 'Netral / Santai',
-      gaze: data.gaze || null,
-      energy: audioTelemetryRef.current.energy || 0,
-      volumeLabel: audioTelemetryRef.current.volumeLabel || 'Normal / Stabil',
-      elapsedSeconds: interviewStartedAtRef.current
-        ? Math.round((now - interviewStartedAtRef.current) / 1000)
-        : null,
-      timestamp: now,
-    });
+    liveTelemetryRef.current = {
+      ...liveTelemetryRef.current,
+      facialTension: data?.facialTension ?? data?.stress ?? null,
+      expression: data?.expression || liveTelemetryRef.current.expression,
+      gaze: data?.gaze ?? liveTelemetryRef.current.gaze,
+      timestamp: data?.timestamp || Date.now(),
+    };
   }
 
   function handleAudioTelemetry(stats) {
-    audioTelemetryRef.current = stats;
+    audioTelemetryRef.current = {
+      ...audioTelemetryRef.current,
+      ...stats,
+      timestamp: Date.now(),
+    };
     if (DEBUG_MODE) setDebugAudio(stats);
   }
+
+  // Kamera dan microphone disampling secara independen setiap ~1 detik.
+  // Callback kamera tidak lagi menjadi pemicu penyimpanan telemetry audio.
+  useEffect(() => {
+    if (stage !== 'interview') return undefined;
+
+    const timer = setInterval(() => {
+      if (!interviewStartedAtRef.current) return;
+
+      const now = Date.now();
+      if (now - lastSampleAtRef.current < TELEMETRY_SAMPLE_INTERVAL_MS - 25) return;
+      lastSampleAtRef.current = now;
+
+      const face = liveTelemetryRef.current;
+      const audio = audioTelemetryRef.current;
+
+      telemetrySamplesRef.current.push({
+        facialTension: face.facialTension,
+        // stress dipertahankan sebagai alias untuk kompatibilitas backend lama.
+        stress: face.facialTension,
+        expression: face.expression || null,
+        gaze: face.gaze || null,
+        energy: audio.active ? audio.energy : null,
+        volumeLabel: audio.active ? audio.volumeLabel : null,
+        zcr: audio.active ? audio.zcr : null,
+        elapsedSeconds: Math.round((now - interviewStartedAtRef.current) / 1000),
+        timestamp: now,
+      });
+    }, 250);
+
+    return () => clearInterval(timer);
+  }, [stage]);
 
   async function handleStartInterview(name) {
     // Harus sinkron di dalam event klik: membuka izin audio untuk TTS berikutnya.
@@ -331,7 +354,7 @@ export default function App() {
         nextQuestion: nextMain,
         isFinal,
         ekspresi: telemetry.expression,
-        stresLevel: Math.round(telemetry.stress || 0),
+        stresLevel: telemetry.facialTension == null ? null : Math.round(telemetry.facialTension),
         nadaSuara: audio.volumeLabel,
         energiSuara: audio.energy,
       });
@@ -401,12 +424,12 @@ export default function App() {
     setStage('finished');
     const samples = telemetrySamplesRef.current;
 
-    let avgStress = 15;
-
-    if (samples.length > 0) {
-      const totalStress = samples.reduce((acc, s) => acc + (s.stress || 0), 0);
-      avgStress = Math.round(totalStress / samples.length);
-    }
+    const faceValues = samples
+      .map((sample) => Number(sample.facialTension ?? sample.stress))
+      .filter((value) => Number.isFinite(value));
+    const avgStress = faceValues.length > 0
+      ? Math.round(faceValues.reduce((sum, value) => sum + value, 0) / faceValues.length)
+      : null;
 
     try {
       await finishInterview({

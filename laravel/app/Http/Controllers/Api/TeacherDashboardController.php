@@ -43,6 +43,47 @@ class TeacherDashboardController extends Controller
             ])
             ->findOrFail($id);
 
+        $logs = $interview->telemetryLogs;
+
+        $faceValues = $logs
+            ->pluck('stress_level')
+            ->filter(fn ($value) => $value !== null)
+            ->map(fn ($value) => (float) $value);
+
+        $energyValues = $logs
+            ->pluck('audio_energy')
+            ->filter(fn ($value) => $value !== null)
+            ->map(fn ($value) => (float) $value);
+
+        $expressionCounts = $logs
+            ->pluck('expression')
+            ->filter(fn ($value) => filled($value))
+            ->countBy()
+            ->sortDesc();
+
+        $volumeCounts = $logs
+            ->pluck('volume_label')
+            ->filter(fn ($value) => filled($value))
+            ->countBy()
+            ->sortDesc();
+
+        $elapsedValues = $logs
+            ->pluck('elapsed_seconds')
+            ->filter(fn ($value) => $value !== null)
+            ->map(fn ($value) => (int) $value);
+
+        $durationSeconds = $elapsedValues->isNotEmpty()
+            ? $elapsedValues->max()
+            : null;
+
+        $avgFacialTension = $faceValues->isNotEmpty()
+            ? round($faceValues->avg(), 2)
+            : null;
+
+        $avgEnergy = $energyValues->isNotEmpty()
+            ? round($energyValues->avg(), 2)
+            : null;
+
         return response()->json([
             'interview' => [
                 'id' => $interview->id,
@@ -56,6 +97,18 @@ class TeacherDashboardController extends Controller
 
             'result' => $interview->result,
 
+            'summary' => [
+                'samples_count' => $logs->count(),
+                'avg_facial_tension' => $avgFacialTension,
+                'avg_energy' => $avgEnergy,
+                'dominant_expression' => $expressionCounts->keys()->first(),
+                'dominant_volume' => $volumeCounts->keys()->first(),
+                'expression_counts' => $expressionCounts->toArray(),
+                'volume_counts' => $volumeCounts->toArray(),
+                'duration_seconds' => $durationSeconds,
+                'question_count' => $interview->answers->count(),
+            ],
+
             'answers' => $interview->answers->map(function ($answer) {
                 return [
                     'id' => $answer->id,
@@ -68,7 +121,7 @@ class TeacherDashboardController extends Controller
                 ];
             })->values(),
 
-            'telemetry' => $interview->telemetryLogs->map(function ($log) {
+            'telemetry' => $logs->map(function ($log) {
                 return [
                     'id' => $log->id,
                     'recorded_at' => $log->recorded_at,
@@ -76,6 +129,7 @@ class TeacherDashboardController extends Controller
                     'expression' => $log->expression,
                     'gaze' => $log->gaze,
                     'stress_level' => $log->stress_level,
+                    'facial_tension' => $log->stress_level,
                     'audio_energy' => $log->audio_energy,
                     'volume_label' => $log->volume_label,
                 ];
@@ -87,6 +141,7 @@ class TeacherDashboardController extends Controller
     {
         $interviews = Interview::query()
             ->with(['student', 'result'])
+            ->withCount('telemetryLogs')
             ->latest()
             ->get()
             ->map(function ($interview) {
@@ -99,6 +154,7 @@ class TeacherDashboardController extends Controller
                     'avg_stress' => $interview->avg_stress,
                     'created_at' => $interview->created_at,
                     'has_result' => $interview->result !== null,
+                    'samples_count' => $interview->telemetry_logs_count,
                 ];
             });
 
