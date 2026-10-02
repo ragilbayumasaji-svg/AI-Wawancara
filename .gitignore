@@ -1,0 +1,32 @@
+# Node Modules
+node_modules/
+**/node_modules/
+
+# Environment / Secret Files (API Key, Database Password, dll)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Output Build
+build/
+dist/
+**/dist/
+
+# Logs & Cache
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/
+
+# Local Python virtual environment
+edge-tts-env/
+
+# Local backup files
+*.bak
+*.backup
+*.backup-*
+
+# Temporary backup files
+*.before-*

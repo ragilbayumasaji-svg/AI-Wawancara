@@ -1,0 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  background: #f5f5f5;
+  color: #212121;
+  font-family: 'Inter', sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d6d6;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b8b8b8;
+}
+
+/* =====================================================================
+   AVATAR AI — animasi ringan (transform & opacity saja)
+   ===================================================================== */
+.avatar-stage {
+  position: relative;
+  width: 11rem;
+  height: 11rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-face {
+  position: relative;
+  z-index: 2;
+  width: 9rem;
+  height: 9rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 25%, #ffffff 0%, #fdf2f2 60%, #fde8e8 100%);
+  border: 3px solid #fff;
+  box-shadow: 0 10px 30px rgba(128, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: avatar-breathe 4s ease-in-out infinite;
+  will-change: transform;
+}
+
+.avatar-emoji {
+  font-size: 5.5rem;
+  line-height: 1;
+  display: inline-block;
+  animation: avatar-pop 0.35s ease-out;
+}
+
+.avatar-ring {
+  position: absolute;
+  inset: 0.75rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(128, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* AI berbicara: cincin membesar berulang + wajah berdenyut halus */
+.avatar-speaking .avatar-face { animation: avatar-speak 0.9s ease-in-out infinite; }
+.avatar-speaking .avatar-ring { border-color: rgba(16, 185, 129, 0.55); animation: avatar-ripple 1.8s ease-out infinite; }
+.avatar-speaking .avatar-ring-2 { animation-delay: 0.9s; }
+
+/* AI mendengarkan: satu cincin lembut menandakan mic aktif */
+.avatar-listening .avatar-ring { border-color: rgba(59, 130, 246, 0.5); animation: avatar-ripple 2.4s ease-out infinite; }
+.avatar-listening .avatar-ring-2 { display: none; }
+
+/* AI berpikir: sedikit miring bolak-balik */
+.avatar-thinking .avatar-face { animation: avatar-think 2.2s ease-in-out infinite; }
+
+@keyframes avatar-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+@keyframes avatar-speak {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.055); }
+}
+@keyframes avatar-think {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes avatar-ripple {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.38); opacity: 0; }
+}
+@keyframes avatar-pop {
+  0% { transform: scale(0.7); opacity: 0.2; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* Titik "sedang berpikir" */
+.thinking-dots { display: inline-flex; gap: 3px; align-items: center; }
+.thinking-dots i {
+  width: 5px; height: 5px; border-radius: 9999px; background: currentColor;
+  animation: thinking-bounce 1.2s ease-in-out infinite;
+}
+.thinking-dots i:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes thinking-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Indikator level suara (mic) */
+.mic-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; }
+.mic-bars i {
+  width: 4px; border-radius: 2px; background: currentColor;
+  height: 100%; transform-origin: bottom; transform: scaleY(0.2);
+  transition: transform 0.12s ease-out;
+}
+
+/* Teks ucapan AI muncul halus */
+.speech-fade { animation: speech-fade 0.4s ease-out; }
+@keyframes speech-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-height: 700px) {
+  .avatar-stage { width: 8.5rem; height: 8.5rem; }
+  .avatar-face { width: 7rem; height: 7rem; }
+  .avatar-emoji { font-size: 4.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-face, .avatar-ring, .avatar-emoji, .thinking-dots i, .speech-fade {
+    animation: none !important;
+  }
+}
