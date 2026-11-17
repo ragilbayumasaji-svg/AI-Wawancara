@@ -131,7 +131,7 @@ export default function App() {
     try {
       const user = await login(loginEmail.trim(), loginPassword);
 
-      if (!['teacher', 'admin'].includes(user?.role)) {
+      if (!['guru', 'admin'].includes(user?.role)) {
         throw new Error('Akun ini tidak memiliki akses dashboard guru.');
       }
 
@@ -509,7 +509,7 @@ export default function App() {
               </div>
             )}
 
-            {!authLoading && ['teacher', 'admin'].includes(currentUser?.role) && (
+            {!authLoading && ['guru', 'admin'].includes(currentUser?.role) && (
               <>
                 <button
                   onClick={() =>
@@ -550,14 +550,14 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-3 relative flex flex-col overflow-hidden">
         {stage === 'admin' &&
-          ['teacher', 'admin'].includes(currentUser?.role) && (
+          ['guru', 'admin'].includes(currentUser?.role) && (
             <AdminDashboard
               onBack={() => setStage('candidate')}
             />
           )}
 
         {stage === 'admin' &&
-          !['teacher', 'admin'].includes(currentUser?.role) && (
+          !['guru', 'admin'].includes(currentUser?.role) && (
             <div className="max-w-md mx-auto my-auto bg-white p-8 rounded-2xl border border-rose-200 shadow-sm text-center">
               <div className="text-4xl mb-3">🔒</div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">
@@ -700,7 +700,7 @@ export default function App() {
               >
                 Ulangi Sesi
               </button>
-              {['teacher', 'admin'].includes(currentUser?.role) && (
+              {['guru', 'admin'].includes(currentUser?.role) && (
                 <button
                   onClick={() => setStage('admin')}
                   className="bg-maroon-600 hover:bg-maroon-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition"
